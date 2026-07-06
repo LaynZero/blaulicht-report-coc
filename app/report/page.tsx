@@ -83,8 +83,7 @@ export default function ReportPage() {
     event.preventDefault();
     if (!user || !userData) return;
     if (banned) return alert("Dein Account ist gesperrt. Du kannst keine Beiträge mehr erstellen.");
-    if (location.trim().length < 3) return alert("Bitte gib einen Ort ein.");
-    if (!hasAudio && description.trim().length < 5) return alert("Bitte schreibe eine Beschreibung oder nimm eine Sprachnachricht auf.");
+    if (!hasAudio && description.trim().length < 1) return alert("Bitte schreibe mindestens 1 Zeichen oder nimm eine Sprachnachricht auf.");
     if (audioDataUrl.length > 850000) return alert("Die Sprachnachricht ist zu lang. Bitte nimm sie kürzer auf, damit sie in Firestore gespeichert werden kann.");
 
     setLoading(true);
@@ -157,13 +156,13 @@ export default function ReportPage() {
           </div>
 
           <div>
-            <label className="mb-2 block font-bold">Ort</label>
-            <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-900 p-4" placeholder="z.B. Cochem B49, Zell Brücke" />
+            <label className="mb-2 block font-bold">Ort <span className="text-sm font-normal text-slate-500">optional</span></label>
+            <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-900 p-4" placeholder="z.B. Cochem B49, Zell Brücke oder frei lassen" />
           </div>
 
           <div>
-            <label className="mb-2 block font-bold">Beschreibung</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={5} className="w-full rounded-2xl border border-slate-700 bg-slate-900 p-4" placeholder="Was ist passiert? Richtung? Besonderheiten? Optional, wenn du eine Sprachnachricht nutzt." />
+            <label className="mb-2 block font-bold">Beschreibung <span className="text-sm font-normal text-slate-500">mind. 1 Zeichen oder Audio</span></label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={5} className="w-full rounded-2xl border border-slate-700 bg-slate-900 p-4" placeholder="z.B. AVK, Blitzer B49, Stau Richtung Cochem..." />
           </div>
 
           <div className="rounded-3xl border border-violet-400/20 bg-violet-500/10 p-4">

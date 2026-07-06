@@ -6,6 +6,7 @@ import { updatePassword, updateProfile } from "firebase/auth";
 import BottomNavigation from "@/components/BottomNavigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleBadge from "@/components/ui/RoleBadge";
+import PushNotifications from "@/components/PushNotifications";
 import { useAuth } from "@/app/context/AuthContext";
 import { db } from "@/app/firebase";
 import { MessageCircle, Shield, Siren } from "lucide-react";
@@ -107,6 +108,10 @@ export default function ProfilePage() {
             <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4 outline-none focus:border-blue-500" placeholder="Ort, z.B. Altstrimmig" maxLength={60} />
             <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4 outline-none focus:border-blue-500" rows={4} placeholder="Kurze Bio" maxLength={240} />
             <button onClick={saveProfile} disabled={saving} className="w-full rounded-2xl bg-blue-600 py-3 font-black disabled:opacity-60">{saving ? "Speichert..." : "Profil speichern"}</button>
+          </div>
+
+          <div className="mt-5">
+            <PushNotifications />
           </div>
 
           <div className="mt-5 glass-card space-y-4 rounded-3xl p-5">

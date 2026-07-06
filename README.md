@@ -47,3 +47,13 @@ role = "developer"
 ```
 
 Danach kannst du im Adminbereich andere Nutzer verwalten und Rollen ändern.
+
+## Push-Benachrichtigungen
+
+Für Push muss in Firebase unter **Project settings → Cloud Messaging → Web Push certificates** ein Key Pair erzeugt werden. Den öffentlichen VAPID-Key in `.env.local` eintragen:
+
+```bash
+NEXT_PUBLIC_FIREBASE_VAPID_KEY=DEIN_WEB_PUSH_VAPID_KEY
+```
+
+Danach App neu starten. Nutzer können Push im Profil aktivieren. Die Tokens werden in Firestore unter `pushTokens` gespeichert.

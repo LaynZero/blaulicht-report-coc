@@ -1,8 +1,9 @@
 import { getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getMessaging, isSupported } from "firebase/messaging";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyAw1f-pELAWnc4vchpdhh-zLJXtWTNBb7o",
   authDomain: "blaulicht-report-coc.firebaseapp.com",
   projectId: "blaulicht-report-coc",
@@ -15,4 +16,12 @@ const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+export async function getFirebaseMessaging() {
+  if (typeof window === "undefined") return null;
+  const supported = await isSupported();
+  if (!supported) return null;
+  return getMessaging(app);
+}
+
 export default app;

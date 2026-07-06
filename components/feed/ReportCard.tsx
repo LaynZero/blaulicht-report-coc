@@ -107,7 +107,7 @@ export default function ReportCard({ report }: { report: Report }) {
   const officialText = report.authorRole === "developer" ? "Entwickler-Post" : "Admin-Post";
 
   return (
-    <article className={`glass-card rounded-3xl p-5 ${isOfficial ? "border-blue-400/40" : ""}`}>
+    <article className={`glass-card overflow-hidden rounded-3xl p-5 ${isOfficial ? "border-blue-400/40" : ""}`}>
       {isOfficial && (
         <div className="mb-4 rounded-2xl border border-blue-400/30 bg-blue-600/15 p-3 text-sm font-black text-blue-200">
           📢 Offizieller {officialText}
@@ -124,15 +124,15 @@ export default function ReportCard({ report }: { report: Report }) {
       <div className="mb-3 flex items-start gap-2">
         <MapPin size={18} className="mt-1 text-red-400" />
         <div>
-          <h2 className="text-lg font-bold">{report.location}</h2>
+          <h2 className="break-words text-lg font-bold">{report.location}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-            <span>von {report.authorName}</span>
+            <span className="min-w-0 break-words">von {report.authorName}</span>
             <RoleBadge role={report.authorRole} />
           </div>
         </div>
       </div>
 
-      {report.description && <p className="whitespace-pre-line text-slate-300">{report.description}</p>}
+      {report.description && <p className="overflow-wrap-anywhere whitespace-pre-line break-words text-slate-300">{report.description}</p>}
 
       {isVoice && (
         <div className="mt-4 rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4">
@@ -176,11 +176,11 @@ export default function ReportCard({ report }: { report: Report }) {
           {comments.map((comment) => (
             <div key={comment.id} className="rounded-2xl bg-slate-900/80 p-3">
               <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                <span className="font-bold text-slate-200">{comment.authorName}</span>
+                <span className="break-words font-bold text-slate-200">{comment.authorName}</span>
                 <RoleBadge role={comment.authorRole} />
                 <span>{formatRelativeTime(comment.createdAt)}</span>
               </div>
-              <p className="text-sm text-slate-200">{comment.text}</p>
+              <p className="overflow-wrap-anywhere whitespace-pre-line break-words text-sm text-slate-200">{comment.text}</p>
             </div>
           ))}
 

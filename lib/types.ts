@@ -47,6 +47,8 @@ export type Report = {
   audioDataUrl?: string;
   audioMimeType?: string;
   audioDurationSeconds?: number;
+  latitude?: number | null;
+  longitude?: number | null;
   createdAt?: unknown;
   updatedAt?: unknown;
 };

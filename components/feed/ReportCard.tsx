@@ -21,6 +21,16 @@ import { categoryEmoji, formatRelativeTime } from "@/lib/helpers";
 import type { Report, ReportComment } from "@/lib/types";
 import RoleBadge from "@/components/ui/RoleBadge";
 
+function getRouteUrl(report: Report) {
+  if (typeof report.latitude === "number" && typeof report.longitude === "number") {
+    return `https://www.google.com/maps/search/?api=1&query=${report.latitude},${report.longitude}`;
+  }
+  if (report.location?.trim()) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(report.location)}`;
+  }
+  return "";
+}
+
 export default function ReportCard({ report }: { report: Report }) {
   const { user, userData } = useAuth();
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -124,7 +134,7 @@ export default function ReportCard({ report }: { report: Report }) {
       <div className="mb-3 flex items-start gap-2">
         <MapPin size={18} className="mt-1 text-red-400" />
         <div>
-          <h2 className="break-words text-lg font-bold">{report.location}</h2>
+          <h2 className="break-words text-lg font-bold">{report.location || "Ohne Ortsangabe"}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
             <span className="min-w-0 break-words">von {report.authorName}</span>
             <RoleBadge role={report.authorRole} />
@@ -164,9 +174,15 @@ export default function ReportCard({ report }: { report: Report }) {
         <button onClick={() => setCommentsOpen((value) => !value)} className="flex items-center justify-center gap-1 rounded-xl bg-slate-800 py-3 text-slate-200">
           <MessageCircle size={16} /> {report.commentsCount ?? 0}
         </button>
-        <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(report.location)}`} target="_blank" className="flex items-center justify-center gap-1 rounded-xl bg-slate-800 py-3 text-slate-200">
-          <Navigation size={16} /> Route
-        </a>
+        {getRouteUrl(report) ? (
+          <a href={getRouteUrl(report)} target="_blank" className="flex items-center justify-center gap-1 rounded-xl bg-slate-800 py-3 text-slate-200">
+            <Navigation size={16} /> Route
+          </a>
+        ) : (
+          <button disabled className="flex items-center justify-center gap-1 rounded-xl bg-slate-800 py-3 text-slate-500 opacity-60">
+            <Navigation size={16} /> Kein Ort
+          </button>
+        )}
       </div>
 
       {commentsOpen && (

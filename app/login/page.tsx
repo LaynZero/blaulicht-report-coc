@@ -6,7 +6,6 @@ import { useState } from "react";
 import { auth } from "../firebase";
 import {
   GoogleAuthProvider,
-  OAuthProvider,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -46,21 +45,6 @@ export default function LoginPage() {
     }
   }
 
-  async function loginWithApple() {
-    setLoading(true);
-    try {
-      const provider = new OAuthProvider("apple.com");
-      provider.addScope("email");
-      provider.addScope("name");
-      await signInWithPopup(auth, provider);
-      router.push("/");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Apple Login fehlgeschlagen.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function resetPassword() {
     if (!email) return alert("Gib zuerst deine E-Mail ein.");
     await sendPasswordResetEmail(auth, email);
@@ -79,10 +63,6 @@ export default function LoginPage() {
 
         <button type="button" onClick={loginWithGoogle} disabled={loading} className="w-full rounded-2xl border border-white/10 bg-white py-3 font-black text-slate-950 disabled:opacity-60">
           Mit Google einloggen
-        </button>
-
-        <button type="button" onClick={loginWithApple} disabled={loading} className="w-full rounded-2xl border border-white/10 bg-black py-3 font-black text-white disabled:opacity-60">
-          Mit Apple einloggen
         </button>
 
         <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">

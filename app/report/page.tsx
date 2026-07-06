@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addDoc, collection, doc, increment, serverTimestamp, updateDoc } from "firebase/firestore";
-import { Mic, Square } from "lucide-react";
+import { LocateFixed, Mic, Square } from "lucide-react";
 import BottomNavigation from "@/components/BottomNavigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/app/context/AuthContext";
@@ -27,6 +27,8 @@ export default function ReportPage() {
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [official, setOfficial] = useState(false);
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locating, setLocating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [audioDataUrl, setAudioDataUrl] = useState("");
@@ -79,6 +81,30 @@ export default function ReportPage() {
     setIsRecording(false);
   }
 
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      alert("Dein Browser unterstützt Standortfreigabe nicht.");
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCoords({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        alert("Standort konnte nicht abgerufen werden oder wurde abgelehnt.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
   async function createReport(event: React.FormEvent) {
     event.preventDefault();
     if (!user || !userData) return;
@@ -107,6 +133,8 @@ export default function ReportPage() {
         audioDataUrl: audioDataUrl || "",
         audioMimeType: audioMimeType || "",
         audioDurationSeconds: audioDurationSeconds || 0,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -158,6 +186,10 @@ export default function ReportPage() {
           <div>
             <label className="mb-2 block font-bold">Ort <span className="text-sm font-normal text-slate-500">optional</span></label>
             <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-900 p-4" placeholder="z.B. Cochem B49, Zell Brücke oder frei lassen" />
+            <button type="button" onClick={useCurrentLocation} disabled={locating || banned} className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-400/25 bg-blue-500/10 py-3 text-sm font-black text-blue-200 disabled:opacity-50">
+              <LocateFixed size={17} /> {locating ? "Standort wird geholt..." : coords ? "Standort für Karte gespeichert" : "Aktuellen Standort für Karte nutzen"}
+            </button>
+            {coords && <p className="mt-2 text-xs text-slate-500">Wird nur zur Kartenanzeige gespeichert. Ortstext bleibt optional.</p>}
           </div>
 
           <div>

@@ -1,5 +1,6 @@
 import BottomNavigation from "@/components/BottomNavigation";
 import AppHeader from "@/components/AppHeader";
+import ReportCard from "@/components/feed/ReportCard";
 export default function Home() {
   const reports = [
     {
@@ -43,25 +44,15 @@ export default function Home() {
 
       <section className="space-y-4 px-5">
         {reports.map((report, index) => (
-          <article
-            key={index}
-            className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <span className="rounded-full bg-slate-800 px-3 py-1 text-sm">
-                {report.category}
-              </span>
-              <span className="text-sm text-slate-400">{report.time}</span>
-            </div>
-
-            <h2 className="text-lg font-bold">{report.location}</h2>
-            <p className="mt-2 text-slate-300">{report.text}</p>
-
-            <div className="mt-4 flex justify-between text-sm text-slate-400">
-              <span>✅ {report.confirmations} bestätigt</span>
-              <span>💬 {report.comments} Kommentare</span>
-            </div>
-          </article>
+          <ReportCard
+  key={index}
+  category={report.category}
+  location={report.location}
+  time={report.time}
+  text={report.text}
+  confirmations={report.confirmations}
+  comments={report.comments}
+/>
         ))}
       </section>
 

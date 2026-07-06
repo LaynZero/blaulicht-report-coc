@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Blaulicht Report COC
 
-## Getting Started
+Next.js-App für lokale Blaulicht-/Verkehrsmeldungen im Kreis Cochem-Zell.
 
-First, run the development server:
+## Enthalten
+
+- Firebase Login & Registrierung
+- eindeutige Benutzernamen
+- Rollen: User, Admin, Entwickler
+- Rollen-Badges im Feed und Profil
+- geschützte Seiten
+- Live-Feed aus Firestore
+- Meldung erstellen
+- Meldungen bestätigen / melden / löschen
+- Admin-Dashboard mit Nutzerverwaltung
+- Profilseite mit Bio, Ort und Statistiken
+- Karten-Übersicht mit Google-Maps-Routenlink
+- Bottom Navigation
+
+## Start
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Dann öffnen:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```txt
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Firebase
 
-## Learn More
+In Firebase aktivieren:
 
-To learn more about Next.js, take a look at the following resources:
+1. Authentication → Email/Password aktivieren
+2. Firestore Database erstellen
+3. Optional: Regeln aus `firestore.rules` übernehmen
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Entwicklerrolle setzen
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Nach der Registrierung in Firestore unter `users/{deineUid}` das Feld setzen:
 
-## Deploy on Vercel
+```txt
+role = "developer"
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Danach kannst du im Adminbereich andere Nutzer verwalten und Rollen ändern.

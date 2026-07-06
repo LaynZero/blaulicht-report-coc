@@ -1,83 +1,60 @@
+"use client";
+
+import { useState } from "react";
+import { doc, updateDoc } from "firebase/firestore";
 import BottomNavigation from "@/components/BottomNavigation";
-import { Shield, Code2, Star, MessageCircle, Siren } from "lucide-react";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import RoleBadge from "@/components/ui/RoleBadge";
+import { useAuth } from "@/app/context/AuthContext";
+import { db } from "@/app/firebase";
+import { MessageCircle, Shield, Siren } from "lucide-react";
 
 export default function ProfilePage() {
-  const user = {
-    name: "Leon",
-    role: "developer",
-    points: 1452,
-    reports: 38,
-    confirmations: 214,
-    comments: 87,
-  };
+  const { user, userData, refreshUserData } = useAuth();
+  const [bio, setBio] = useState(userData?.bio ?? "");
+  const [location, setLocation] = useState(userData?.location ?? "");
+  const [saving, setSaving] = useState(false);
 
-  const roleBadge = {
-    developer: {
-      label: "Entwickler",
-      icon: <Code2 size={16} />,
-      className: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-    },
-    admin: {
-      label: "Admin",
-      icon: <Shield size={16} />,
-      className: "bg-red-500/20 text-red-300 border-red-500/30",
-    },
-    user: {
-      label: "Mitglied",
-      icon: <Star size={16} />,
-      className: "bg-slate-500/20 text-slate-300 border-slate-500/30",
-    },
-  };
-
-  const badge = roleBadge[user.role as keyof typeof roleBadge];
+  async function saveProfile() {
+    if (!user) return;
+    setSaving(true);
+    await updateDoc(doc(db, "users", user.uid), { bio, location });
+    await refreshUserData();
+    setSaving(false);
+  }
 
   return (
-    <main className="min-h-screen px-5 pb-28 pt-8 text-white">
-      <section className="mx-auto max-w-md">
-        <div className="glass-card rounded-3xl p-6 text-center">
-          <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-blue-600 blue-glow">
-            <Siren size={40} />
+    <ProtectedRoute>
+      <main className="min-h-screen px-5 pb-28 pt-8 text-white">
+        <section className="mx-auto max-w-md">
+          <div className="glass-card rounded-3xl p-6 text-center">
+            <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-blue-600 blue-glow">
+              <Siren size={40} />
+            </div>
+            <h1 className="text-3xl font-black">{userData?.displayName}</h1>
+            <p className="mt-1 text-slate-400">@{userData?.username}</p>
+            <div className="mt-3"><RoleBadge role={userData?.role} /></div>
+            <div className="mt-6 rounded-2xl bg-slate-950/60 p-4">
+              <p className="text-sm text-slate-400">Vertrauenspunkte</p>
+              <p className="mt-1 text-3xl font-black text-green-400">{userData?.trustPoints ?? 0}</p>
+            </div>
           </div>
 
-          <h1 className="text-3xl font-black">{user.name}</h1>
-
-          <div
-            className={`mx-auto mt-3 flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${badge.className}`}
-          >
-            {badge.icon}
-            {badge.label}
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            <div className="glass-card rounded-2xl p-4 text-center"><Siren className="mx-auto mb-2 text-blue-400" size={22} /><p className="text-xl font-bold">{userData?.reportsCount ?? 0}</p><p className="text-xs text-slate-400">Beiträge</p></div>
+            <div className="glass-card rounded-2xl p-4 text-center"><Shield className="mx-auto mb-2 text-green-400" size={22} /><p className="text-xl font-bold">{userData?.confirmationsCount ?? 0}</p><p className="text-xs text-slate-400">Bestätigt</p></div>
+            <div className="glass-card rounded-2xl p-4 text-center"><MessageCircle className="mx-auto mb-2 text-purple-400" size={22} /><p className="text-xl font-bold">{userData?.commentsCount ?? 0}</p><p className="text-xs text-slate-400">Kommentare</p></div>
           </div>
 
-          <div className="mt-6 rounded-2xl bg-slate-950/60 p-4">
-            <p className="text-sm text-slate-400">Vertrauenspunkte</p>
-            <p className="mt-1 text-3xl font-black text-green-400">
-              {user.points}
-            </p>
+          <div className="mt-5 glass-card space-y-4 rounded-3xl p-5">
+            <h2 className="text-xl font-black">Profil bearbeiten</h2>
+            <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4" placeholder="Ort, z.B. Altstrimmig" />
+            <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4" rows={4} placeholder="Kurze Bio" />
+            <button onClick={saveProfile} disabled={saving} className="w-full rounded-2xl bg-blue-600 py-3 font-black disabled:opacity-60">{saving ? "Speichert..." : "Speichern"}</button>
           </div>
-        </div>
-
-        <div className="mt-5 grid grid-cols-3 gap-3">
-          <div className="glass-card rounded-2xl p-4 text-center">
-            <Siren className="mx-auto mb-2 text-blue-400" size={22} />
-            <p className="text-xl font-bold">{user.reports}</p>
-            <p className="text-xs text-slate-400">Beiträge</p>
-          </div>
-
-          <div className="glass-card rounded-2xl p-4 text-center">
-            <Shield className="mx-auto mb-2 text-green-400" size={22} />
-            <p className="text-xl font-bold">{user.confirmations}</p>
-            <p className="text-xs text-slate-400">Bestätigt</p>
-          </div>
-
-          <div className="glass-card rounded-2xl p-4 text-center">
-            <MessageCircle className="mx-auto mb-2 text-purple-400" size={22} />
-            <p className="text-xl font-bold">{user.comments}</p>
-            <p className="text-xs text-slate-400">Kommentare</p>
-          </div>
-        </div>
-      </section>
-
-      <BottomNavigation />
-    </main>
+        </section>
+        <BottomNavigation />
+      </main>
+    </ProtectedRoute>
   );
 }

@@ -27,6 +27,7 @@ export type ReportCategory =
   | "Sonstiges";
 
 export type ReportStatus = "new" | "confirmed" | "expired" | "hidden";
+export type ReportPostType = "report" | "official" | "voice" | "official_voice";
 
 export type Report = {
   id: string;
@@ -41,6 +42,21 @@ export type Report = {
   commentsCount: number;
   status: ReportStatus;
   pinned?: boolean;
+  official?: boolean;
+  postType?: ReportPostType;
+  audioDataUrl?: string;
+  audioMimeType?: string;
+  audioDurationSeconds?: number;
   createdAt?: unknown;
   updatedAt?: unknown;
+};
+
+export type ReportComment = {
+  id: string;
+  reportId: string;
+  text: string;
+  authorId: string;
+  authorName: string;
+  authorRole: UserRole;
+  createdAt?: unknown;
 };

@@ -8,12 +8,14 @@ import AppHeader from "@/components/AppHeader";
 import ReportCard from "@/components/feed/ReportCard";
 import { db } from "./firebase";
 import { reportCategories } from "@/lib/helpers";
+import { useAuth } from "@/app/context/AuthContext";
 import type { Report, ReportCategory } from "@/lib/types";
 
 export default function Home() {
   const [reports, setReports] = useState<Report[]>([]);
   const [category, setCategory] = useState<ReportCategory | "Alle">("Alle");
   const [loading, setLoading] = useState(true);
+  const { userData } = useAuth();
 
   useEffect(() => {
     const q = query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(50));
@@ -35,9 +37,15 @@ export default function Home() {
       <AppHeader />
 
       <section className="mx-auto max-w-md px-5 py-4">
-        <Link href="/report" className="block w-full rounded-2xl bg-blue-600 py-4 text-center font-bold shadow-lg shadow-blue-600/30">
-          + Neue Meldung posten
-        </Link>
+        {userData?.banned ? (
+          <div className="rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-center text-sm font-bold text-red-200">
+            Dein Account ist gesperrt. Du kannst aktuell keine Beiträge oder Kommentare erstellen.
+          </div>
+        ) : (
+          <Link href="/report" className="block w-full rounded-2xl bg-blue-600 py-4 text-center font-bold shadow-lg shadow-blue-600/30">
+            + Neue Meldung posten
+          </Link>
+        )}
 
         <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
           <button onClick={() => setCategory("Alle")} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${category === "Alle" ? "bg-blue-600" : "bg-slate-800"}`}>Alle</button>

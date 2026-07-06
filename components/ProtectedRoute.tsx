@@ -15,15 +15,16 @@ export default function ProtectedRoute({ children, roles }: { children: React.Re
       router.replace("/login");
       return;
     }
-    if (userData?.banned) {
-      router.replace("/login");
+    if (roles && userData?.banned) {
+      router.replace("/");
       return;
     }
     if (roles && userData && !roles.includes(userData.role)) router.replace("/");
   }, [loading, router, roles, user, userData]);
 
   if (loading) return <main className="min-h-screen p-6 text-slate-300">Lädt...</main>;
-  if (!user || userData?.banned) return null;
+  if (!user) return null;
+  if (roles && userData?.banned) return null;
   if (roles && userData && !roles.includes(userData.role)) return null;
   return <>{children}</>;
 }

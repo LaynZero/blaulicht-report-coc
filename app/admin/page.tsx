@@ -34,6 +34,7 @@ export default function AdminPage() {
   }
 
   async function toggleBan(appUser: AppUser) {
+    if (appUser.role === "developer") return alert("Entwickler können nicht gesperrt werden.");
     await updateDoc(doc(db, "users", appUser.uid), { banned: !appUser.banned });
   }
 
@@ -73,7 +74,7 @@ export default function AdminPage() {
                     </span>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button onClick={() => toggleBan(appUser)} className="rounded-xl bg-red-600 py-3 text-sm font-bold">{appUser.banned ? "Entsperren" : "Sperren"}</button>
+                    <button disabled={appUser.role === "developer"} onClick={() => toggleBan(appUser)} className="rounded-xl bg-red-600 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">{appUser.role === "developer" ? "Geschützt" : appUser.banned ? "Entsperren" : "Sperren"}</button>
                     <select disabled={!canManageRoles} value={appUser.role} onChange={(e) => setRole(appUser.uid, e.target.value as UserRole)} className="rounded-xl bg-slate-800 p-3 text-sm font-bold disabled:opacity-40">
                       <option value="user">User</option>
                       <option value="admin">Admin</option>

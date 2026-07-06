@@ -9,21 +9,38 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function myRole() {
+      return me().data.role;
+    }
+
     function isAdmin() {
-      return signedIn() && (me().data.role == "admin" || me().data.role == "developer");
+      return signedIn() && (myRole() == "admin" || myRole() == "developer");
     }
 
     function isDeveloper() {
-      return signedIn() && me().data.role == "developer";
+      return signedIn() && myRole() == "developer";
+    }
+
+    function notBanned() {
+      return signedIn() && me().data.banned != true;
+    }
+
+    function developerNotBannedByUpdate() {
+      return !(resource.data.role == "developer" && request.resource.data.banned == true);
     }
 
     match /users/{userId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == userId;
       allow update: if signedIn() && (
-        request.auth.uid == userId || isAdmin()
+        (
+          request.auth.uid == userId &&
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.banned == resource.data.banned
+        ) ||
+        (isAdmin() && developerNotBannedByUpdate())
       );
-      allow delete: if isDeveloper();
+      allow delete: if isDeveloper() && resource.data.role != "developer";
     }
 
     match /usernames/{username} {
@@ -34,9 +51,15 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow read: if true;
-      allow create: if signedIn();
-      allow update: if signedIn();
+      allow create: if notBanned();
+      allow update: if notBanned() || isAdmin();
       allow delete: if isAdmin();
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if notBanned();
+        allow update, delete: if isAdmin() || (signedIn() && resource.data.authorId == request.auth.uid);
+      }
     }
   }
 }

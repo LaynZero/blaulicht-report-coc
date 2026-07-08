@@ -343,10 +343,8 @@ export default function AdminPage() {
   const emergencyReports = reports.filter((report) => report.emergency).length;
   const totalCommentsLoaded = reports.reduce((sum, report) => sum + (report.commentsCount ?? 0), 0);
 
-  function buildAdminUserApiUrl(uid: string) {
-    const path = `/api/admin/users/${encodeURIComponent(uid)}`;
-    if (typeof window === "undefined") return path;
-    return `${window.location.origin}${path}`;
+  function buildAdminUserApiUrl() {
+    return "/api/admin/user-action";
   }
 
   async function readApiResult(response: Response) {
@@ -370,14 +368,14 @@ export default function AdminPage() {
       const token = await auth.currentUser?.getIdToken(true);
       if (!token) throw new Error("Du bist nicht angemeldet.");
 
-      const response = await fetch(buildAdminUserApiUrl(uid), {
-        method: "PATCH",
+      const response = await fetch(buildAdminUserApiUrl(), {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ action: "setRole", uid, role }),
       });
 
       const result = await readApiResult(response);
@@ -412,12 +410,14 @@ export default function AdminPage() {
       const token = await auth.currentUser?.getIdToken(true);
       if (!token) throw new Error("Du bist nicht angemeldet.");
 
-      const response = await fetch(buildAdminUserApiUrl(appUser.uid), {
-        method: "DELETE",
+      const response = await fetch(buildAdminUserApiUrl(), {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
+        body: JSON.stringify({ action: "deleteUser", uid: appUser.uid }),
       });
 
       const result = await readApiResult(response);

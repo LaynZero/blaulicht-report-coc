@@ -343,23 +343,44 @@ export default function AdminPage() {
   const emergencyReports = reports.filter((report) => report.emergency).length;
   const totalCommentsLoaded = reports.reduce((sum, report) => sum + (report.commentsCount ?? 0), 0);
 
+  function buildAdminUserApiUrl(uid: string) {
+    const path = `/api/admin/users/${encodeURIComponent(uid)}`;
+    if (typeof window === "undefined") return path;
+    return `${window.location.origin}${path}`;
+  }
+
+  async function readApiResult(response: Response) {
+    const text = await response.text();
+    try {
+      return JSON.parse(text) as { ok?: boolean; message?: string };
+    } catch {
+      return {
+        ok: false,
+        message: response.ok
+          ? "Die Server-Antwort konnte nicht gelesen werden."
+          : `Serverfehler ${response.status}: Die API-Route wurde nicht korrekt gefunden oder geladen.`,
+      };
+    }
+  }
+
   async function setRole(uid: string, role: UserRole) {
     if (!canManageRoles) return alert("Nur Admins und Entwickler dürfen Rollen ändern.");
 
     try {
-      const token = await auth.currentUser?.getIdToken();
+      const token = await auth.currentUser?.getIdToken(true);
       if (!token) throw new Error("Du bist nicht angemeldet.");
 
-      const response = await fetch(`/api/admin/users/${uid}`, {
+      const response = await fetch(buildAdminUserApiUrl(uid), {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
         body: JSON.stringify({ role }),
       });
 
-      const result = (await response.json()) as { ok?: boolean; message?: string };
+      const result = await readApiResult(response);
       if (!response.ok || !result.ok) {
         throw new Error(result.message || "Rolle konnte nicht geändert werden.");
       }
@@ -388,15 +409,18 @@ export default function AdminPage() {
     }
 
     try {
-      const token = await auth.currentUser?.getIdToken();
+      const token = await auth.currentUser?.getIdToken(true);
       if (!token) throw new Error("Du bist nicht angemeldet.");
 
-      const response = await fetch(`/api/admin/users/${appUser.uid}`, {
+      const response = await fetch(buildAdminUserApiUrl(appUser.uid), {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
       });
 
-      const result = (await response.json()) as { ok?: boolean; message?: string };
+      const result = await readApiResult(response);
       if (!response.ok || !result.ok) {
         throw new Error(result.message || "Nutzer konnte nicht gelöscht werden.");
       }

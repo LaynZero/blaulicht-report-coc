@@ -91,7 +91,7 @@ service cloud.firestore {
         (isDeveloper() && developerNotBannedByUpdate()) ||
         (adminCanUpdateUser() && developerNotBannedByUpdate())
       );
-      allow delete: if isDeveloper() && resource.data.role == "user";
+      allow delete: if (isDeveloper() || isAdmin()) && resource.data.role == "user";
     }
 
     match /usernames/{username} {

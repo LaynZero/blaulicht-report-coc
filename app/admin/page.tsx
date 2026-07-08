@@ -343,50 +343,97 @@ export default function AdminPage() {
   const emergencyReports = reports.filter((report) => report.emergency).length;
   const totalCommentsLoaded = reports.reduce((sum, report) => sum + (report.commentsCount ?? 0), 0);
 
-  function buildAdminUserApiUrl() {
-    return "/api/admin/user-action";
+  function buildAdminUserApiUrl(uid?: string) {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return uid ? `${origin}/api/admin/users/${encodeURIComponent(uid)}` : `${origin}/api/admin/user-action`;
   }
 
   async function readApiResult(response: Response) {
+    const contentType = response.headers.get("content-type") || "";
     const text = await response.text();
-    try {
-      return JSON.parse(text) as { ok?: boolean; message?: string };
-    } catch {
-      return {
-        ok: false,
-        message: response.ok
-          ? "Die Server-Antwort konnte nicht gelesen werden."
-          : `Serverfehler ${response.status}: Die API-Route wurde nicht korrekt gefunden oder geladen.`,
-      };
+
+    if (contentType.includes("application/json")) {
+      try {
+        return JSON.parse(text) as { ok?: boolean; message?: string };
+      } catch {
+        return { ok: false, message: "Die JSON-Antwort konnte nicht gelesen werden." };
+      }
     }
+
+    const cleanText = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 220);
+    return {
+      ok: false,
+      message: response.ok
+        ? "Die Server-Antwort konnte nicht gelesen werden."
+        : `Serverfehler ${response.status}: ${cleanText || "API-Route nicht erreichbar oder nicht korrekt geladen."}`,
+    };
+  }
+
+  async function callAdminUserAction(payload: { action: "setRole" | "deleteUser"; uid: string; role?: UserRole }) {
+    const token = await auth.currentUser?.getIdToken(true);
+    if (!token) throw new Error("Du bist nicht angemeldet.");
+
+    const response = await fetch(buildAdminUserApiUrl(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+
+    const result = await readApiResult(response);
+    if (!response.ok || !result.ok) {
+      throw new Error(result.message || "Admin-Aktion konnte nicht ausgeführt werden.");
+    }
+
+    return result;
+  }
+
+  async function callLegacyAdminUserApi(uid: string, role?: UserRole) {
+    const token = await auth.currentUser?.getIdToken(true);
+    if (!token) throw new Error("Du bist nicht angemeldet.");
+
+    const response = await fetch(buildAdminUserApiUrl(uid), {
+      method: role ? "PATCH" : "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      body: role ? JSON.stringify({ role }) : undefined,
+      cache: "no-store",
+    });
+
+    const result = await readApiResult(response);
+    if (!response.ok || !result.ok) {
+      throw new Error(result.message || "Admin-Aktion konnte nicht ausgeführt werden.");
+    }
+
+    return result;
   }
 
   async function setRole(uid: string, role: UserRole) {
     if (!canManageRoles) return alert("Nur Admins und Entwickler dürfen Rollen ändern.");
 
     try {
-      const token = await auth.currentUser?.getIdToken(true);
-      if (!token) throw new Error("Du bist nicht angemeldet.");
-
-      const response = await fetch(buildAdminUserApiUrl(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        body: JSON.stringify({ action: "setRole", uid, role }),
-      });
-
-      const result = await readApiResult(response);
-      if (!response.ok || !result.ok) {
-        throw new Error(result.message || "Rolle konnte nicht geändert werden.");
+      try {
+        await callAdminUserAction({ action: "setRole", uid, role });
+      } catch (apiError) {
+        console.warn("Neue Admin-API fehlgeschlagen, versuche Fallback-Route.", apiError);
+        try {
+          await callLegacyAdminUserApi(uid, role);
+        } catch (legacyError) {
+          console.warn("Fallback-API fehlgeschlagen, versuche Firestore-Regel-Fallback.", legacyError);
+          await updateDoc(doc(db, "users", uid), { role });
+        }
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Rolle konnte nicht geändert werden.");
     }
   }
-
   async function toggleBan(appUser: AppUser) {
     if (appUser.role === "developer")
       return alert("Entwickler können nicht gesperrt werden.");
@@ -407,22 +454,20 @@ export default function AdminPage() {
     }
 
     try {
-      const token = await auth.currentUser?.getIdToken(true);
-      if (!token) throw new Error("Du bist nicht angemeldet.");
+      try {
+        await callAdminUserAction({ action: "deleteUser", uid: appUser.uid });
+      } catch (apiError) {
+        console.warn("Neue Lösch-API fehlgeschlagen, versuche Fallback-Route.", apiError);
+        try {
+          await callLegacyAdminUserApi(appUser.uid);
+        } catch (legacyError) {
+          console.warn("Fallback-Lösch-API fehlgeschlagen, lösche App-Daten direkt über Firestore-Regeln.", legacyError);
 
-      const response = await fetch(buildAdminUserApiUrl(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        body: JSON.stringify({ action: "deleteUser", uid: appUser.uid }),
-      });
-
-      const result = await readApiResult(response);
-      if (!response.ok || !result.ok) {
-        throw new Error(result.message || "Nutzer konnte nicht gelöscht werden.");
+          const batch = writeBatch(db);
+          batch.delete(doc(db, "users", appUser.uid));
+          if (appUser.username) batch.delete(doc(db, "usernames", appUser.username));
+          await batch.commit();
+        }
       }
 
       setSelectedUid("");

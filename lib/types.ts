@@ -119,7 +119,28 @@ export type CrashLog = {
   userId?: string;
   userAgent?: string;
   url?: string;
+  pathname?: string;
+  filename?: string;
+  line?: number;
+  column?: number;
+  reason?: string;
+  browser?: string;
+  platform?: string;
+  language?: string;
+  online?: boolean;
+  viewport?: string;
+  screen?: string;
+  visibilityState?: string;
+  lastAction?: string;
   createdAt?: unknown;
+};
+
+export type AppSettings = {
+  maintenanceMode: boolean;
+  allowAdminsDuringMaintenance: boolean;
+  maintenanceMessage?: string;
+  updatedAt?: unknown;
+  updatedBy?: string;
 };
 
 export type AppNotification = {

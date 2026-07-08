@@ -14,6 +14,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   startAt,
   updateDoc,
   where,
@@ -33,6 +34,7 @@ import type {
   SupportMessage,
   SupportTicket,
   UserRole,
+  AppSettings,
 } from "@/lib/types";
 import {
   Ban,
@@ -47,7 +49,15 @@ import {
   Activity,
   Eye,
   Users,
+  Wrench,
+  Save,
 } from "lucide-react";
+
+const defaultAppSettings: AppSettings = {
+  maintenanceMode: false,
+  allowAdminsDuringMaintenance: true,
+  maintenanceMessage: "Wir führen gerade Wartungsarbeiten durch. Bitte versuche es gleich noch einmal.",
+};
 
 function SupportTicketPanel({ ticket }: { ticket: SupportTicket }) {
   const { user, userData } = useAuth();
@@ -212,6 +222,8 @@ export default function AdminPage() {
   const [userSearch, setUserSearch] = useState("");
   const [selectedUid, setSelectedUid] = useState("");
   const [showAllUserActivity, setShowAllUserActivity] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const cleanSearch = userSearch.trim().toLowerCase().replace(/^@/, "");
 
@@ -294,6 +306,14 @@ export default function AdminPage() {
   }, [userData?.role]);
 
   useEffect(() => {
+    if (userData?.role !== "developer") return;
+    const unsubSettings = onSnapshot(doc(db, "appSettings", "main"), (snap) => {
+      setAppSettings(snap.exists() ? ({ ...defaultAppSettings, ...snap.data() } as AppSettings) : defaultAppSettings);
+    });
+    return () => unsubSettings();
+  }, [userData?.role]);
+
+  useEffect(() => {
     setSelectedReports([]);
     setSelectedComments([]);
     if (!selectedUid) return;
@@ -342,6 +362,28 @@ export default function AdminPage() {
   const todayReports = reports.filter((report) => Number((report.createdAt as { seconds?: number })?.seconds ?? 0) * 1000 > Date.now() - 86400000).length;
   const emergencyReports = reports.filter((report) => report.emergency).length;
   const totalCommentsLoaded = reports.reduce((sum, report) => sum + (report.commentsCount ?? 0), 0);
+
+  async function saveMaintenanceSettings(nextSettings = appSettings) {
+    if (userData?.role !== "developer") return alert("Nur Entwickler dürfen den Wartungsmodus ändern.");
+    setSavingSettings(true);
+    try {
+      await setDoc(
+        doc(db, "appSettings", "main"),
+        {
+          maintenanceMode: nextSettings.maintenanceMode === true,
+          allowAdminsDuringMaintenance: nextSettings.allowAdminsDuringMaintenance !== false,
+          maintenanceMessage: (nextSettings.maintenanceMessage || defaultAppSettings.maintenanceMessage || "").trim(),
+          updatedAt: serverTimestamp(),
+          updatedBy: userData.uid,
+        },
+        { merge: true },
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Wartungsmodus konnte nicht gespeichert werden.");
+    } finally {
+      setSavingSettings(false);
+    }
+  }
 
   function buildAdminUserApiUrl(uid?: string) {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -734,6 +776,73 @@ export default function AdminPage() {
             </div>
           </div>
 
+          {userData?.role === "developer" && (
+            <div className="mt-6 glass-card rounded-3xl p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <Wrench className="text-amber-300" />
+                <div>
+                  <h2 className="text-xl font-black">Wartungsmodus</h2>
+                  <p className="text-sm text-slate-400">Nur Entwickler können die App in Wartung setzen. Entwickler dürfen immer weiterarbeiten.</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                  <div>
+                    <p className="font-black">Wartungsmodus aktivieren</p>
+                    <p className="mt-1 text-xs text-slate-400">Normale Nutzer sehen dann nur noch die Wartungsseite.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={appSettings.maintenanceMode}
+                    onChange={(e) => {
+                      const next = { ...appSettings, maintenanceMode: e.target.checked };
+                      setAppSettings(next);
+                      saveMaintenanceSettings(next);
+                    }}
+                    className="h-5 w-5 accent-amber-400"
+                  />
+                </label>
+
+                <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                  <div>
+                    <p className="font-black">Admins während Wartung erlauben</p>
+                    <p className="mt-1 text-xs text-slate-400">Aus = nur Entwickler kommen während Wartung in die App.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={appSettings.allowAdminsDuringMaintenance !== false}
+                    onChange={(e) => {
+                      const next = { ...appSettings, allowAdminsDuringMaintenance: e.target.checked };
+                      setAppSettings(next);
+                      saveMaintenanceSettings(next);
+                    }}
+                    className="h-5 w-5 accent-blue-500"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Wartungstext</label>
+                <textarea
+                  value={appSettings.maintenanceMessage || ""}
+                  onChange={(e) => setAppSettings((current) => ({ ...current, maintenanceMessage: e.target.value }))}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-slate-950 p-3 text-sm outline-none focus:border-amber-400"
+                  placeholder="Text, den Nutzer während der Wartung sehen..."
+                />
+                <button
+                  type="button"
+                  disabled={savingSettings}
+                  onClick={() => saveMaintenanceSettings()}
+                  className="mt-3 flex items-center gap-2 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-black text-slate-950 disabled:opacity-60"
+                >
+                  <Save size={16} /> {savingSettings ? "Speichere..." : "Wartungstext speichern"}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-6 glass-card rounded-3xl p-5">
             <div className="mb-4 flex items-center gap-3">
               <MessageCircle className="text-violet-300" />
@@ -824,6 +933,15 @@ export default function AdminPage() {
                   <div key={log.id} className="rounded-2xl bg-slate-950/70 p-4">
                     <p className="break-words font-bold text-red-200">{log.message}</p>
                     <p className="mt-1 break-all text-xs text-slate-500">{log.url}</p>
+                    <div className="mt-3 grid gap-2 text-xs text-slate-400 sm:grid-cols-2">
+                      <p><b>Quelle:</b> {log.source || "client"}</p>
+                      <p><b>Zeile:</b> {log.line || "-"}:{log.column || "-"}</p>
+                      <p><b>Seite:</b> {log.pathname || "-"}</p>
+                      <p><b>Online:</b> {log.online === false ? "Nein" : "Ja"}</p>
+                      <p><b>Viewport:</b> {log.viewport || "-"}</p>
+                      <p><b>Letzte Aktion:</b> {log.lastAction || "-"}</p>
+                    </div>
+                    {log.reason && <p className="mt-2 break-words rounded-xl bg-slate-900 p-3 text-xs text-slate-400"><b>Grund:</b> {log.reason}</p>}
                     {log.stack && <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/40 p-3 text-[11px] text-slate-400">{log.stack}</pre>}
                     <button onClick={() => deleteDoc(doc(db, "crashLogs", log.id))} className="mt-3 rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-slate-300">Log löschen</button>
                   </div>

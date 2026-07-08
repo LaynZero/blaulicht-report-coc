@@ -14,7 +14,7 @@ Next.js-App für lokale Blaulicht-/Verkehrsmeldungen im Kreis Cochem-Zell.
 - Meldungen bestätigen / melden / löschen
 - Admin-Dashboard mit Nutzerverwaltung
 - Profilseite mit Bio, Ort und Statistiken
-- Karten-Übersicht mit Google-Maps-Routenlink
+- echte OpenStreetMap-Karte mit Markern und Google-Maps-Routenlink
 - Bottom Navigation
 
 ## Start
@@ -50,10 +50,24 @@ Danach kannst du im Adminbereich andere Nutzer verwalten und Rollen ändern.
 
 ## Push-Benachrichtigungen
 
-Für Push muss in Firebase unter **Project settings → Cloud Messaging → Web Push certificates** ein Key Pair erzeugt werden. Den öffentlichen VAPID-Key in `.env.local` eintragen:
+Für Push brauchst du zwei Dinge:
+
+1. **Web Push VAPID Key**
+
+Firebase → Project settings → Cloud Messaging → Web Push certificates → Key Pair erzeugen.
 
 ```bash
 NEXT_PUBLIC_FIREBASE_VAPID_KEY=DEIN_WEB_PUSH_VAPID_KEY
 ```
 
-Danach App neu starten. Nutzer können Push im Profil aktivieren. Die Tokens werden in Firestore unter `pushTokens` gespeichert.
+2. **Firebase Admin Service Account für den Versand**
+
+Firebase → Project settings → Service accounts → Generate new private key.
+
+Den kompletten JSON-Key in Vercel als Environment Variable eintragen:
+
+```bash
+FIREBASE_SERVICE_ACCOUNT_KEY={...kompletter service account json...}
+```
+
+Danach in Vercel neu deployen. Nutzer können Push im Profil aktivieren. Wenn ein neuer Beitrag erstellt wird, sendet `/api/push/report-created` die Benachrichtigung an gespeicherte Tokens.

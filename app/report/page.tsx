@@ -95,6 +95,7 @@ export default function ReportPage() {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         });
+        setLocation((current) => current.trim() || "Mein Standort");
         setLocating(false);
       },
       () => {
@@ -116,7 +117,7 @@ export default function ReportPage() {
     try {
       const postType: ReportPostType = official && hasAudio ? "official_voice" : official ? "official" : hasAudio ? "voice" : "report";
 
-      await addDoc(collection(db, "reports"), {
+      const reportRef = await addDoc(collection(db, "reports"), {
         category,
         location: location.trim(),
         description: description.trim(),
@@ -135,6 +136,7 @@ export default function ReportPage() {
         audioDurationSeconds: audioDurationSeconds || 0,
         latitude: coords?.latitude ?? null,
         longitude: coords?.longitude ?? null,
+        locationSource: coords ? "current_location" : "manual",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -142,6 +144,13 @@ export default function ReportPage() {
         reportsCount: increment(1),
         trustPoints: increment(official ? 8 : 5),
       });
+
+      fetch("/api/push/report-created", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId: reportRef.id, authorId: user.uid }),
+      }).catch(() => undefined);
+
       router.push("/");
     } catch (err) {
       alert(err instanceof Error ? err.message : "Meldung konnte nicht erstellt werden.");
@@ -189,7 +198,11 @@ export default function ReportPage() {
             <button type="button" onClick={useCurrentLocation} disabled={locating || banned} className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-400/25 bg-blue-500/10 py-3 text-sm font-black text-blue-200 disabled:opacity-50">
               <LocateFixed size={17} /> {locating ? "Standort wird geholt..." : coords ? "Standort für Karte gespeichert" : "Aktuellen Standort für Karte nutzen"}
             </button>
-            {coords && <p className="mt-2 text-xs text-slate-500">Wird nur zur Kartenanzeige gespeichert. Ortstext bleibt optional.</p>}
+            {coords && (
+              <div className="mt-2 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-3 text-xs text-blue-100">
+                <b>Mein Standort gespeichert</b> · wird im Beitrag als Ort angezeigt und als Marker auf der Karte genutzt.
+              </div>
+            )}
           </div>
 
           <div>

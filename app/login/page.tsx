@@ -8,7 +8,7 @@ import {
   GoogleAuthProvider,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
 } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
@@ -36,8 +36,7 @@ export default function LoginPage() {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
-      await signInWithPopup(auth, provider);
-      router.push("/");
+      await signInWithRedirect(auth, provider);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Google Login fehlgeschlagen.");
     } finally {

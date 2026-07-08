@@ -84,7 +84,7 @@ export default function PushNotifications() {
       }, { merge: true });
 
       setEnabled(true);
-      setMessage("Push-Benachrichtigungen sind aktiviert.");
+      setMessage("Push-Benachrichtigungen sind aktiviert. Für echten Versand muss zusätzlich FIREBASE_SERVICE_ACCOUNT_KEY bei Vercel gesetzt sein.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Push konnte nicht aktiviert werden.");
     } finally {
@@ -102,12 +102,12 @@ export default function PushNotifications() {
         </div>
         <div className="flex-1">
           <p className="font-black">Push-Benachrichtigungen</p>
-          <p className="mt-1 text-sm text-slate-400">Erhalte später Hinweise bei neuen Meldungen, offiziellen Posts oder wichtigen Admin-Infos.</p>
+          <p className="mt-1 text-sm text-slate-400">Erhalte Hinweise bei neuen Meldungen, offiziellen Posts oder wichtigen Admin-Infos.</p>
 
           {!vapidKey && (
             <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-200">
               <div className="mb-1 flex items-center gap-2 font-black"><KeyRound size={15} /> Firebase VAPID Key fehlt</div>
-              Firebase Console → Projekteinstellungen → Cloud Messaging → Web Push-Zertifikate. Den Schlüssel in <b>.env.local</b> als <b>NEXT_PUBLIC_FIREBASE_VAPID_KEY</b> eintragen und danach den Dev-Server neu starten.
+              Firebase Console → Projekteinstellungen → Cloud Messaging → Web Push-Zertifikate. Den Schlüssel lokal in <b>.env.local</b> oder bei Vercel als <b>NEXT_PUBLIC_FIREBASE_VAPID_KEY</b> eintragen und danach neu starten/deployen.
             </div>
           )}
 

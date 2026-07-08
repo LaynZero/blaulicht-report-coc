@@ -48,12 +48,17 @@ export default function MapPage() {
     const lats = points.map((p) => p.latitude);
     const lngs = points.map((p) => p.longitude);
     return {
-      minLat: Math.min(...lats) - 0.02,
-      maxLat: Math.max(...lats) + 0.02,
-      minLng: Math.min(...lngs) - 0.03,
-      maxLng: Math.max(...lngs) + 0.03,
+      minLat: Math.min(...lats) - 0.035,
+      maxLat: Math.max(...lats) + 0.035,
+      minLng: Math.min(...lngs) - 0.055,
+      maxLng: Math.max(...lngs) + 0.055,
     };
   }, [markerReports, userLocation]);
+
+  const osmUrl = useMemo(() => {
+    const bbox = [bounds.minLng, bounds.minLat, bounds.maxLng, bounds.maxLat].join(",");
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`;
+  }, [bounds]);
 
   function useMyLocation() {
     if (!navigator.geolocation) return alert("Standort wird von deinem Browser nicht unterstützt.");
@@ -78,10 +83,16 @@ export default function MapPage() {
         </div>
 
         <div className="mt-5 overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900 shadow-2xl">
-          <div className="relative h-80 bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,.35),transparent_28%),radial-gradient(circle_at_70%_65%,rgba(239,68,68,.24),transparent_24%),linear-gradient(135deg,#0f172a,#020617)]">
-            <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(255,255,255,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.08)_1px,transparent_1px)] [background-size:32px_32px]" />
-            <div className="absolute left-4 top-4 rounded-2xl bg-slate-950/80 px-3 py-2 text-xs font-black text-slate-200 backdrop-blur">
-              {markerReports.length} Marker · Region COC
+          <div className="relative h-96 bg-slate-900">
+            <iframe
+              title="Blaulicht Live-Karte"
+              src={osmUrl}
+              className="absolute inset-0 h-full w-full border-0 opacity-95"
+              loading="lazy"
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/10 via-transparent to-slate-950/25" />
+            <div className="absolute left-4 top-4 rounded-2xl bg-slate-950/85 px-3 py-2 text-xs font-black text-slate-100 shadow-xl backdrop-blur">
+              {markerReports.length} Marker · echte Kartenansicht
             </div>
 
             {userLocation && (
@@ -131,7 +142,7 @@ export default function MapPage() {
                   <p className="min-w-0 break-words font-bold">{categoryEmoji(report.category)} {report.location || "Ohne Ort"}</p>
                   <p className="shrink-0 text-xs text-slate-500">{formatRelativeTime(report.createdAt)}</p>
                 </div>
-                <p className="mt-1 text-sm text-slate-400">{report.category}{hasCoords(report) ? " · Standort-Marker aktiv" : ""}</p>
+                <p className="mt-1 text-sm text-slate-400">{report.category}{report.locationSource === "current_location" ? " · Mein Standort" : hasCoords(report) ? " · Standort-Marker aktiv" : ""}</p>
                 {url ? (
                   <a href={url} target="_blank" className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-3 text-sm font-black text-slate-200">
                     <Navigation size={16} /> Route öffnen

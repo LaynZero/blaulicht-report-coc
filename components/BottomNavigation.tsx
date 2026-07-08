@@ -3,7 +3,7 @@
 import type { ElementType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Info, MapPinned, Plus, Shield, UserRound } from "lucide-react";
+import { Home, Info, MessageCircle, Plus, Shield, UserRound } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 
 function NavItem({ href, icon: Icon, label }: { href: string; icon: ElementType; label: string }) {
@@ -31,7 +31,7 @@ export default function BottomNavigation() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pt-2">
       <div className="mx-auto grid max-w-md grid-cols-[1fr_1fr_76px_1fr_1fr] items-center rounded-[2rem] border border-white/10 bg-slate-950/92 px-3 py-3 text-slate-400 shadow-2xl shadow-black/40 backdrop-blur-2xl">
         <NavItem href="/" icon={Home} label="Feed" />
-        <NavItem href="/map" icon={MapPinned} label="Karte" />
+        <NavItem href="/support" icon={MessageCircle} label="Support" />
 
         <div className="flex justify-center">
           <Link

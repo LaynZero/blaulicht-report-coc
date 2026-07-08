@@ -49,6 +49,7 @@ export type Report = {
   audioDurationSeconds?: number;
   latitude?: number | null;
   longitude?: number | null;
+  locationSource?: "manual" | "current_location";
   createdAt?: unknown;
   updatedAt?: unknown;
 };
@@ -56,6 +57,38 @@ export type Report = {
 export type ReportComment = {
   id: string;
   reportId: string;
+  text: string;
+  authorId: string;
+  authorName: string;
+  authorRole: UserRole;
+  createdAt?: unknown;
+};
+
+export type SupportTarget = "admin" | "developer";
+export type SupportStatus = "open" | "answered" | "closed";
+export type SupportCategory = "question" | "report_problem" | "bug" | "feedback" | "feature" | "other";
+
+export type SupportTicket = {
+  id: string;
+  target: SupportTarget;
+  category: SupportCategory;
+  subject: string;
+  initialMessage: string;
+  status: SupportStatus;
+  createdBy: string;
+  createdByName: string;
+  createdByRole: UserRole;
+  assignedLabel: string;
+  lastMessage: string;
+  lastMessageBy: string;
+  lastMessageAt?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+export type SupportMessage = {
+  id: string;
+  ticketId: string;
   text: string;
   authorId: string;
   authorName: string;

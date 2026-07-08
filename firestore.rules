@@ -29,6 +29,44 @@ service cloud.firestore {
       return !(resource.data.role == "developer" && request.resource.data.banned == true);
     }
 
+    function canReadTicket() {
+      return signedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        isDeveloper() ||
+        (myRole() == "admin" && resource.data.target == "admin")
+      );
+    }
+
+    function canCreateTicket() {
+      return notBanned() && request.resource.data.createdBy == request.auth.uid;
+    }
+
+    function canUpdateTicket() {
+      return signedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        isDeveloper() ||
+        (myRole() == "admin" && resource.data.target == "admin")
+      );
+    }
+
+    function canReadTicketMessage(ticketId) {
+      let ticket = get(/databases/$(database)/documents/supportTickets/$(ticketId));
+      return signedIn() && (
+        ticket.data.createdBy == request.auth.uid ||
+        isDeveloper() ||
+        (myRole() == "admin" && ticket.data.target == "admin")
+      );
+    }
+
+    function canCreateTicketMessage(ticketId) {
+      let ticket = get(/databases/$(database)/documents/supportTickets/$(ticketId));
+      return notBanned() && (
+        ticket.data.createdBy == request.auth.uid ||
+        isDeveloper() ||
+        (myRole() == "admin" && ticket.data.target == "admin")
+      );
+    }
+
     match /users/{userId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == userId;
@@ -53,6 +91,20 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update: if signedIn() && request.resource.data.uid == request.auth.uid;
       allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    match /supportTickets/{ticketId} {
+      allow read: if canReadTicket();
+      allow create: if canCreateTicket();
+      allow update: if canUpdateTicket();
+      allow delete: if isDeveloper();
+
+      match /messages/{messageId} {
+        allow read: if canReadTicketMessage(ticketId);
+        allow create: if canCreateTicketMessage(ticketId) && request.resource.data.authorId == request.auth.uid;
+        allow update: if isDeveloper();
+        allow delete: if canReadTicketMessage(ticketId);
+      }
     }
 
     match /reports/{reportId} {

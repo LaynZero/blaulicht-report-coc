@@ -2,29 +2,204 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
+  getDocs,
   endAt,
   limit,
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
   startAt,
   updateDoc,
+  where,
+  writeBatch,
 } from "firebase/firestore";
 import BottomNavigation from "@/components/BottomNavigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleBadge from "@/components/ui/RoleBadge";
 import { useAuth } from "@/app/context/AuthContext";
 import { db } from "@/app/firebase";
-import type { AppUser, Report, UserRole } from "@/lib/types";
-import { Ban, BarChart3, Flag, Search, Shield, Trash2, UserCog, Users } from "lucide-react";
+import type {
+  AppUser,
+  Report,
+  SupportMessage,
+  SupportTicket,
+  UserRole,
+} from "@/lib/types";
+import {
+  Ban,
+  BarChart3,
+  Flag,
+  MessageCircle,
+  Search,
+  Send,
+  Shield,
+  Trash2,
+  UserCog,
+  Users,
+} from "lucide-react";
+
+function SupportTicketPanel({ ticket }: { ticket: SupportTicket }) {
+  const { user, userData } = useAuth();
+  const [messages, setMessages] = useState<SupportMessage[]>([]);
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "supportTickets", ticket.id, "messages"),
+      orderBy("createdAt", "asc"),
+      limit(80),
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setMessages(
+        snap.docs.map(
+          (item) =>
+            ({
+              id: item.id,
+              ticketId: ticket.id,
+              ...item.data(),
+            }) as SupportMessage,
+        ),
+      );
+    });
+    return () => unsub();
+  }, [ticket.id]);
+
+  async function answerTicket(event: React.FormEvent) {
+    event.preventDefault();
+    if (!user || !userData) return;
+    const text = reply.trim();
+    if (text.length < 1) return;
+
+    setSending(true);
+    try {
+      await addDoc(collection(db, "supportTickets", ticket.id, "messages"), {
+        text,
+        authorId: user.uid,
+        authorName: userData.displayName,
+        authorRole: userData.role,
+        createdAt: serverTimestamp(),
+      });
+      await updateDoc(doc(db, "supportTickets", ticket.id), {
+        lastMessage: text,
+        lastMessageBy: user.uid,
+        status: "answered",
+        updatedAt: serverTimestamp(),
+        lastMessageAt: serverTimestamp(),
+      });
+      setReply("");
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Antwort konnte nicht gesendet werden.",
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function closeTicket() {
+    if (
+      !confirm(
+        "Ticket wirklich schließen und endgültig löschen? Dadurch werden Ticket und Chatverlauf aus Firestore entfernt.",
+      )
+    )
+      return;
+
+    try {
+      const messagesSnap = await getDocs(
+        collection(db, "supportTickets", ticket.id, "messages"),
+      );
+      const batch = writeBatch(db);
+      messagesSnap.docs.forEach((messageDoc) => batch.delete(messageDoc.ref));
+      batch.delete(doc(db, "supportTickets", ticket.id));
+      await batch.commit();
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Ticket konnte nicht gelöscht werden.",
+      );
+    }
+  }
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-300">
+            {ticket.assignedLabel}
+          </p>
+          <h3 className="mt-1 break-words text-lg font-black">
+            {ticket.subject}
+          </h3>
+          <p className="mt-1 break-words text-sm text-slate-400">
+            von {ticket.createdByName} · {ticket.status}
+          </p>
+        </div>
+        <button
+          onClick={closeTicket}
+          className="rounded-2xl bg-red-600/80 px-4 py-2 text-xs font-black text-white hover:bg-red-500"
+        >
+          Schließen & löschen
+        </button>
+      </div>
+
+      <div className="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-2xl bg-slate-950/80 p-3">
+        {messages.map((message) => {
+          const own = message.authorId === user?.uid;
+          return (
+            <div
+              key={message.id}
+              className={`flex ${own ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`max-w-[85%] rounded-2xl p-3 ${own ? "bg-blue-600" : "bg-slate-800"}`}
+              >
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+                  <b>{message.authorName}</b>
+                  <RoleBadge role={message.authorRole} />
+                </div>
+                <p className="overflow-wrap-anywhere whitespace-pre-line break-words text-sm">
+                  {message.text}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {ticket.status !== "closed" && (
+        <form onSubmit={answerTicket} className="mt-3 flex gap-2">
+          <input
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            placeholder="Antwort schreiben..."
+            className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-950 p-3 text-sm outline-none focus:border-blue-500"
+          />
+          <button
+            disabled={sending}
+            className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-black disabled:opacity-60"
+          >
+            <Send size={16} /> Senden
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
 
 export default function AdminPage() {
   const { userData } = useAuth();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [userSearch, setUserSearch] = useState("");
   const [selectedUid, setSelectedUid] = useState("");
 
@@ -32,7 +207,13 @@ export default function AdminPage() {
 
   useEffect(() => {
     const usersQuery = cleanSearch
-      ? query(collection(db, "users"), orderBy("username"), startAt(cleanSearch), endAt(`${cleanSearch}\uf8ff`), limit(25))
+      ? query(
+          collection(db, "users"),
+          orderBy("username"),
+          startAt(cleanSearch),
+          endAt(`${cleanSearch}\uf8ff`),
+          limit(25),
+        )
       : query(collection(db, "users"), orderBy("createdAt", "desc"), limit(25));
 
     const unsubUsers = onSnapshot(usersQuery, (snap) => {
@@ -45,14 +226,58 @@ export default function AdminPage() {
   }, [cleanSearch]);
 
   useEffect(() => {
-    const unsubReports = onSnapshot(query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(100)), (snap) => {
-      setReports(snap.docs.map((item) => ({ id: item.id, ...item.data() }) as Report));
-    });
+    const unsubReports = onSnapshot(
+      query(
+        collection(db, "reports"),
+        orderBy("createdAt", "desc"),
+        limit(100),
+      ),
+      (snap) => {
+        setReports(
+          snap.docs.map((item) => ({ id: item.id, ...item.data() }) as Report),
+        );
+      },
+    );
     return () => unsubReports();
   }, []);
 
-  const selectedUser = useMemo(() => users.find((item) => item.uid === selectedUid) ?? users[0], [selectedUid, users]);
-  const flaggedReports = useMemo(() => reports.filter((report) => (report.reports ?? []).length > 0), [reports]);
+  useEffect(() => {
+    if (!userData) return;
+    const targetQuery =
+      userData.role === "developer"
+        ? query(
+            collection(db, "supportTickets"),
+            orderBy("updatedAt", "desc"),
+            limit(30),
+          )
+        : query(
+            collection(db, "supportTickets"),
+            where("target", "==", "admin"),
+            limit(30),
+          );
+
+    const unsubTickets = onSnapshot(targetQuery, (snap) => {
+      setTickets(
+        snap.docs
+          .map((item) => ({ id: item.id, ...item.data() }) as SupportTicket)
+          .sort(
+            (a, b) =>
+              Number((b.updatedAt as { seconds?: number })?.seconds ?? 0) -
+              Number((a.updatedAt as { seconds?: number })?.seconds ?? 0),
+          ),
+      );
+    });
+    return () => unsubTickets();
+  }, [userData]);
+
+  const selectedUser = useMemo(
+    () => users.find((item) => item.uid === selectedUid) ?? users[0],
+    [selectedUid, users],
+  );
+  const flaggedReports = useMemo(
+    () => reports.filter((report) => (report.reports ?? []).length > 0),
+    [reports],
+  );
   const canManageRoles = userData?.role === "developer";
 
   async function setRole(uid: string, role: UserRole) {
@@ -61,12 +286,14 @@ export default function AdminPage() {
   }
 
   async function toggleBan(appUser: AppUser) {
-    if (appUser.role === "developer") return alert("Entwickler können nicht gesperrt werden.");
+    if (appUser.role === "developer")
+      return alert("Entwickler können nicht gesperrt werden.");
     await updateDoc(doc(db, "users", appUser.uid), { banned: !appUser.banned });
   }
 
   async function deleteReport(reportId: string) {
-    if (confirm("Meldung löschen?")) await deleteDoc(doc(db, "reports", reportId));
+    if (confirm("Meldung löschen?"))
+      await deleteDoc(doc(db, "reports", reportId));
   }
 
   return (
@@ -75,10 +302,13 @@ export default function AdminPage() {
         <section className="mx-auto max-w-5xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-400">Adminbereich</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-400">
+                Adminbereich
+              </p>
               <h1 className="text-4xl font-black tracking-tight">Dashboard</h1>
               <p className="mt-2 max-w-xl text-sm text-slate-400">
-                Nutzer werden nicht mehr alle auf einmal angezeigt. Suche nach @Benutzername und bearbeite dann gezielt einen Account.
+                Nutzer werden nicht mehr alle auf einmal angezeigt. Suche nach
+                @Benutzername und bearbeite dann gezielt einen Account.
               </p>
             </div>
             <div className="rounded-3xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-200">
@@ -87,10 +317,28 @@ export default function AdminPage() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="glass-card rounded-3xl p-4"><Users className="mb-3 text-blue-400" /><p className="text-2xl font-black">{users.length}</p><p className="text-sm text-slate-400">geladene Nutzer</p></div>
-            <div className="glass-card rounded-3xl p-4"><Shield className="mb-3 text-green-400" /><p className="text-2xl font-black">{reports.length}</p><p className="text-sm text-slate-400">letzte Meldungen</p></div>
-            <div className="glass-card rounded-3xl p-4"><Flag className="mb-3 text-yellow-400" /><p className="text-2xl font-black">{flaggedReports.length}</p><p className="text-sm text-slate-400">gemeldet</p></div>
-            <div className="glass-card rounded-3xl p-4"><Ban className="mb-3 text-red-400" /><p className="text-2xl font-black">{users.filter((u) => u.banned).length}</p><p className="text-sm text-slate-400">gesperrt geladen</p></div>
+            <div className="glass-card rounded-3xl p-4">
+              <Users className="mb-3 text-blue-400" />
+              <p className="text-2xl font-black">{users.length}</p>
+              <p className="text-sm text-slate-400">geladene Nutzer</p>
+            </div>
+            <div className="glass-card rounded-3xl p-4">
+              <Shield className="mb-3 text-green-400" />
+              <p className="text-2xl font-black">{reports.length}</p>
+              <p className="text-sm text-slate-400">letzte Meldungen</p>
+            </div>
+            <div className="glass-card rounded-3xl p-4">
+              <Flag className="mb-3 text-yellow-400" />
+              <p className="text-2xl font-black">{flaggedReports.length}</p>
+              <p className="text-sm text-slate-400">gemeldet</p>
+            </div>
+            <div className="glass-card rounded-3xl p-4">
+              <MessageCircle className="mb-3 text-violet-400" />
+              <p className="text-2xl font-black">
+                {tickets.filter((ticket) => ticket.status !== "closed").length}
+              </p>
+              <p className="text-sm text-slate-400">offene Tickets</p>
+            </div>
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -99,12 +347,17 @@ export default function AdminPage() {
                 <UserCog className="text-blue-400" />
                 <div>
                   <h2 className="text-xl font-black">Nutzer suchen</h2>
-                  <p className="text-xs text-slate-400">max. 25 Treffer pro Suche</p>
+                  <p className="text-xs text-slate-400">
+                    max. 25 Treffer pro Suche
+                  </p>
                 </div>
               </div>
 
               <label className="relative block">
-                <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <Search
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
+                  size={18}
+                />
                 <input
                   value={userSearch}
                   onChange={(e) => {
@@ -121,7 +374,9 @@ export default function AdminPage() {
                 onChange={(e) => setSelectedUid(e.target.value)}
                 className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950 p-4 text-sm font-bold outline-none focus:border-blue-500"
               >
-                {users.length === 0 && <option value="">Keine Nutzer gefunden</option>}
+                {users.length === 0 && (
+                  <option value="">Keine Nutzer gefunden</option>
+                )}
                 {users.map((appUser) => (
                   <option key={appUser.uid} value={appUser.uid}>
                     @{appUser.username} · {appUser.displayName}
@@ -130,34 +385,61 @@ export default function AdminPage() {
               </select>
 
               <div className="mt-4 rounded-2xl bg-slate-950/70 p-4 text-xs leading-relaxed text-slate-400">
-                Tipp: Für 10.000+ Nutzer ist Suche besser als eine riesige Liste. Die Seite lädt dadurch schneller und bleibt übersichtlich.
+                Tipp: Für 10.000+ Nutzer ist Suche besser als eine riesige
+                Liste. Die Seite lädt dadurch schneller und bleibt
+                übersichtlich.
               </div>
             </div>
 
             <div className="glass-card rounded-3xl p-5">
               <h2 className="mb-4 text-xl font-black">👥 Nutzerverwaltung</h2>
               {!selectedUser ? (
-                <p className="rounded-2xl bg-slate-950/60 p-4 text-sm text-slate-400">Suche einen Nutzer oder wähle einen Treffer aus.</p>
+                <p className="rounded-2xl bg-slate-950/60 p-4 text-sm text-slate-400">
+                  Suche einen Nutzer oder wähle einen Treffer aus.
+                </p>
               ) : (
                 <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="break-words text-2xl font-black">{selectedUser.displayName}</p>
+                        <p className="break-words text-2xl font-black">
+                          {selectedUser.displayName}
+                        </p>
                         <RoleBadge role={selectedUser.role} />
                       </div>
-                      <p className="mt-1 break-all text-sm text-slate-400">@{selectedUser.username}</p>
-                      <p className="mt-1 break-all text-xs text-slate-500">{selectedUser.email}</p>
+                      <p className="mt-1 break-all text-sm text-slate-400">
+                        @{selectedUser.username}
+                      </p>
+                      <p className="mt-1 break-all text-xs text-slate-500">
+                        {selectedUser.email}
+                      </p>
                     </div>
-                    <span className={`w-fit rounded-full px-3 py-1 text-xs font-black ${selectedUser.banned ? "bg-red-500/15 text-red-300" : "bg-green-500/15 text-green-300"}`}>
+                    <span
+                      className={`w-fit rounded-full px-3 py-1 text-xs font-black ${selectedUser.banned ? "bg-red-500/15 text-red-300" : "bg-green-500/15 text-green-300"}`}
+                    >
                       {selectedUser.banned ? "Gesperrt" : "Aktiv"}
                     </span>
                   </div>
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl bg-slate-900 p-4"><p className="text-2xl font-black">{selectedUser.reportsCount ?? 0}</p><p className="text-xs text-slate-400">Beiträge</p></div>
-                    <div className="rounded-2xl bg-slate-900 p-4"><p className="text-2xl font-black">{selectedUser.commentsCount ?? 0}</p><p className="text-xs text-slate-400">Kommentare</p></div>
-                    <div className="rounded-2xl bg-slate-900 p-4"><p className="text-2xl font-black">{selectedUser.trustPoints ?? 0}</p><p className="text-xs text-slate-400">Trust</p></div>
+                    <div className="rounded-2xl bg-slate-900 p-4">
+                      <p className="text-2xl font-black">
+                        {selectedUser.reportsCount ?? 0}
+                      </p>
+                      <p className="text-xs text-slate-400">Beiträge</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900 p-4">
+                      <p className="text-2xl font-black">
+                        {selectedUser.commentsCount ?? 0}
+                      </p>
+                      <p className="text-xs text-slate-400">Kommentare</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900 p-4">
+                      <p className="text-2xl font-black">
+                        {selectedUser.trustPoints ?? 0}
+                      </p>
+                      <p className="text-xs text-slate-400">Trust</p>
+                    </div>
                   </div>
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -166,12 +448,18 @@ export default function AdminPage() {
                       onClick={() => toggleBan(selectedUser)}
                       className="rounded-2xl bg-red-600 py-4 text-sm font-black transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
                     >
-                      {selectedUser.role === "developer" ? "Entwickler geschützt" : selectedUser.banned ? "Nutzer entsperren" : "Nutzer sperren"}
+                      {selectedUser.role === "developer"
+                        ? "Entwickler geschützt"
+                        : selectedUser.banned
+                          ? "Nutzer entsperren"
+                          : "Nutzer sperren"}
                     </button>
                     <select
                       disabled={!canManageRoles}
                       value={selectedUser.role}
-                      onChange={(e) => setRole(selectedUser.uid, e.target.value as UserRole)}
+                      onChange={(e) =>
+                        setRole(selectedUser.uid, e.target.value as UserRole)
+                      }
                       className="rounded-2xl border border-white/10 bg-slate-900 p-4 text-sm font-black outline-none disabled:opacity-40"
                     >
                       <option value="user">User</option>
@@ -184,17 +472,57 @@ export default function AdminPage() {
             </div>
           </div>
 
+          <div className="mt-6 glass-card rounded-3xl p-5">
+            <div className="mb-4 flex items-center gap-3">
+              <MessageCircle className="text-violet-300" />
+              <div>
+                <h2 className="text-xl font-black">💬 Support-Tickets</h2>
+                <p className="text-sm text-slate-400">
+                  Admins sehen Admin-Support. Entwickler sehen zusätzlich
+                  IT-Span Feedback und Bugmeldungen.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              {tickets.length === 0 && (
+                <p className="rounded-2xl bg-slate-950/60 p-4 text-sm text-slate-400">
+                  Keine offenen Support-Tickets. Geschlossene Tickets werden
+                  automatisch entfernt, damit die Datenbank schlank bleibt.
+                </p>
+              )}
+              {tickets.map((ticket) => (
+                <SupportTicketPanel key={ticket.id} ticket={ticket} />
+              ))}
+            </div>
+          </div>
+
           <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
             <div className="glass-card rounded-3xl p-5">
               <h2 className="mb-4 text-xl font-black">🚩 Gemeldete Beiträge</h2>
               <div className="space-y-3">
-                {flaggedReports.length === 0 && <p className="text-sm text-slate-400">Keine gemeldeten Beiträge.</p>}
+                {flaggedReports.length === 0 && (
+                  <p className="text-sm text-slate-400">
+                    Keine gemeldeten Beiträge.
+                  </p>
+                )}
                 {flaggedReports.map((report) => (
-                  <div key={report.id} className="rounded-2xl bg-slate-950/60 p-4">
-                    <p className="break-words font-bold">{report.category} · {report.location}</p>
-                    <p className="mt-1 line-clamp-2 break-words text-sm text-slate-400">{report.description || "Ohne Beschreibung"}</p>
-                    <p className="mt-1 text-sm text-slate-400">{(report.reports ?? []).length} Meldungen</p>
-                    <button onClick={() => deleteReport(report.id)} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold">
+                  <div
+                    key={report.id}
+                    className="rounded-2xl bg-slate-950/60 p-4"
+                  >
+                    <p className="break-words font-bold">
+                      {report.category} · {report.location}
+                    </p>
+                    <p className="mt-1 line-clamp-2 break-words text-sm text-slate-400">
+                      {report.description || "Ohne Beschreibung"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {(report.reports ?? []).length} Meldungen
+                    </p>
+                    <button
+                      onClick={() => deleteReport(report.id)}
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold"
+                    >
                       <Trash2 size={15} /> Beitrag löschen
                     </button>
                   </div>
@@ -207,7 +535,10 @@ export default function AdminPage() {
                 <BarChart3 className="text-blue-400" />
                 <div>
                   <h2 className="text-xl font-black">Statistiken</h2>
-                  <p className="text-sm text-slate-400">Live aus Firestore: geladene Nutzer, letzte Meldungen und gemeldete Beiträge.</p>
+                  <p className="text-sm text-slate-400">
+                    Live aus Firestore: geladene Nutzer, letzte Meldungen und
+                    gemeldete Beiträge.
+                  </p>
                 </div>
               </div>
             </div>

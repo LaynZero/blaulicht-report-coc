@@ -83,14 +83,32 @@ service cloud.firestore {
 
     match /usernames/{username} {
       allow read: if true;
-      allow create: if signedIn() && !exists(/databases/$(database)/documents/usernames/$(username));
-      allow update, delete: if isDeveloper();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && !exists(/databases/$(database)/documents/usernames/$(username));
+      allow update: if isDeveloper();
+      allow delete: if isDeveloper() || (signedIn() && resource.data.uid == request.auth.uid);
     }
 
     match /pushTokens/{token} {
       allow read: if isAdmin();
       allow create, update: if signedIn() && request.resource.data.uid == request.auth.uid;
       allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+
+
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn();
+      allow update, delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /crashLogs/{logId} {
+      allow read, delete: if isDeveloper();
+      allow create: if true;
+      allow update: if false;
     }
 
     match /supportTickets/{ticketId} {

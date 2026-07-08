@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
+import ClientErrorLogger from "@/components/ClientErrorLogger";
 
 export const metadata: Metadata = {
   title: "Blaulicht Report COC",
@@ -21,7 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="de" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider><ClientErrorLogger />{children}</AuthProvider>
       </body>
     </html>
   );

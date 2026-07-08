@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   addDoc,
@@ -17,9 +18,12 @@ import {
 import { Flag, MapPin, MessageCircle, Mic, Navigation, ShieldCheck, Trash2 } from "lucide-react";
 import { db } from "@/app/firebase";
 import { useAuth } from "@/app/context/AuthContext";
-import { categoryEmoji, formatRelativeTime } from "@/lib/helpers";
+import { categoryEmoji, extractMentions, formatRelativeTime } from "@/lib/helpers";
 import type { Report, ReportComment } from "@/lib/types";
 import RoleBadge from "@/components/ui/RoleBadge";
+import UserAvatar from "@/components/ui/UserAvatar";
+import MentionTextarea from "@/components/MentionTextarea";
+import { createMentionNotifications } from "@/lib/notifications";
 
 function getRouteUrl(report: Report) {
   if (typeof report.latitude === "number" && typeof report.longitude === "number") {
@@ -44,6 +48,8 @@ export default function ReportCard({ report }: { report: Report }) {
   const flagged = user ? report.reports?.includes(user.uid) : false;
   const isVoice = Boolean(report.audioDataUrl);
   const isOfficial = Boolean(report.official);
+  const isEmergency = Boolean(report.emergency);
+  const authorHref = report.authorUsername ? `/u/${report.authorUsername}` : undefined;
 
   useEffect(() => {
     if (!commentsOpen) return;
@@ -70,16 +76,28 @@ export default function ReportCard({ report }: { report: Report }) {
     if (!ensureCanWrite()) return;
     const confirmations = report.confirmations ?? [];
     const next = confirmed ? confirmations.filter((id) => id !== user!.uid) : [...confirmations, user!.uid];
-    await updateDoc(doc(db, "reports", report.id), {
-      confirmations: next,
-      status: next.length >= 3 ? "confirmed" : "new",
-    });
+    try {
+      await updateDoc(doc(db, "reports", report.id), {
+        confirmations: next,
+        status: next.length >= 3 ? "confirmed" : "new",
+      });
+      await updateDoc(doc(db, "users", user!.uid), {
+        confirmationsCount: increment(confirmed ? -1 : 1),
+        trustPoints: increment(confirmed ? -2 : 2),
+      });
+    } catch {
+      alert("Aktion nicht erlaubt. Falls dein Account gerade gesperrt wurde, lade die App bitte neu.");
+    }
   }
 
   async function flagReport() {
     if (!ensureCanWrite()) return;
     if (flagged) return;
-    await updateDoc(doc(db, "reports", report.id), { reports: [...(report.reports ?? []), user!.uid] });
+    try {
+      await updateDoc(doc(db, "reports", report.id), { reports: [...(report.reports ?? []), user!.uid] });
+    } catch {
+      alert("Aktion nicht erlaubt. Falls dein Account gerade gesperrt wurde, lade die App bitte neu.");
+    }
   }
 
   async function sendComment(event: React.FormEvent) {
@@ -90,14 +108,30 @@ export default function ReportCard({ report }: { report: Report }) {
 
     setSendingComment(true);
     try {
-      await addDoc(collection(db, "reports", report.id, "comments"), {
+      const commentRef = await addDoc(collection(db, "reports", report.id, "comments"), {
         text,
+        mentions: extractMentions(text),
         authorId: user!.uid,
         authorName: userData.displayName,
         authorRole: userData.role,
+        authorUsername: userData.username,
+        authorAvatarDataUrl: userData.avatarDataUrl || "",
         createdAt: serverTimestamp(),
       });
       await updateDoc(doc(db, "reports", report.id), { commentsCount: increment(1), updatedAt: serverTimestamp() });
+      await createMentionNotifications({
+        mentions: extractMentions(text),
+        actorId: user!.uid,
+        actorName: userData.displayName,
+        text,
+        reportId: report.id,
+        source: "comment",
+      });
+      fetch("/api/push/comment-created", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId: report.id, commentId: commentRef.id, authorId: user!.uid }),
+      }).catch(() => undefined);
       await updateDoc(doc(db, "users", user!.uid), { commentsCount: increment(1), trustPoints: increment(1) });
       setCommentText("");
       setCommentsOpen(true);
@@ -117,8 +151,14 @@ export default function ReportCard({ report }: { report: Report }) {
   const officialText = report.authorRole === "developer" ? "Entwickler-Post" : "Admin-Post";
 
   return (
-    <article className={`glass-card overflow-hidden rounded-3xl p-5 ${isOfficial ? "border-blue-400/40" : ""}`}>
-      {isOfficial && (
+    <article className={`glass-card overflow-hidden rounded-3xl p-5 ${isEmergency ? "border-red-400/70 shadow-lg shadow-red-600/10" : isOfficial ? "border-blue-400/40" : ""}`}>
+      {isEmergency && (
+        <div className="mb-4 rounded-2xl border border-red-400/40 bg-red-600/20 p-3 text-sm font-black text-red-100">
+          🚨 EILMELDUNG · Wichtige Warnung
+        </div>
+      )}
+
+      {isOfficial && !isEmergency && (
         <div className="mb-4 rounded-2xl border border-blue-400/30 bg-blue-600/15 p-3 text-sm font-black text-blue-200">
           📢 Offizieller {officialText}
         </div>
@@ -131,18 +171,38 @@ export default function ReportCard({ report }: { report: Report }) {
         <span className="text-xs text-slate-400">{formatRelativeTime(report.createdAt)}</span>
       </div>
 
-      <div className="mb-3 flex items-start gap-2">
-        <MapPin size={18} className="mt-1 text-red-400" />
-        <div>
-          <h2 className="break-words text-lg font-bold">{report.location || "Ohne Ortsangabe"}</h2>
+      <div className="mb-3 flex items-start gap-3">
+        {authorHref ? (
+          <Link href={authorHref} className="rounded-full transition hover:scale-105" aria-label={`Profil von ${report.authorName} öffnen`}>
+            <UserAvatar src={report.authorAvatarDataUrl} name={report.authorName} size="md" />
+          </Link>
+        ) : (
+          <UserAvatar src={report.authorAvatarDataUrl} name={report.authorName} size="md" />
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-2">
+            <MapPin size={18} className="mt-1 shrink-0 text-red-400" />
+            <h2 className="min-w-0 break-words text-lg font-bold">{report.location || "Ohne Ortsangabe"}</h2>
+          </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-            <span className="min-w-0 break-words">von {report.authorName}</span>
+            {authorHref ? (
+              <Link href={authorHref} className="min-w-0 break-words font-bold text-slate-200 hover:text-blue-300">
+                {report.authorName} <span className="font-normal text-slate-500">@{report.authorUsername}</span>
+              </Link>
+            ) : (
+              <span className="min-w-0 break-words font-bold text-slate-200">{report.authorName}</span>
+            )}
             <RoleBadge role={report.authorRole} />
           </div>
         </div>
       </div>
 
       {report.description && <p className="overflow-wrap-anywhere whitespace-pre-line break-words text-slate-300">{report.description}</p>}
+
+      {report.imageDataUrl && (
+        <img src={report.imageDataUrl} alt="Beitragsfoto" className="mt-4 max-h-[420px] w-full rounded-2xl object-cover" loading="lazy" />
+      )}
 
       {isVoice && (
         <div className="mt-4 rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4">
@@ -157,7 +217,7 @@ export default function ReportCard({ report }: { report: Report }) {
       <div className="mt-4 rounded-2xl bg-slate-950/60 p-3 text-sm">
         <div className={report.status === "confirmed" ? "flex items-center gap-2 text-green-400" : "flex items-center gap-2 text-yellow-300"}>
           <ShieldCheck size={17} />
-          {statusText} · {(report.confirmations ?? []).length} Bestätigungen
+          {isEmergency ? "Eilmeldung" : statusText} · {(report.confirmations ?? []).length} Bestätigungen
         </div>
       </div>
 
@@ -191,10 +251,25 @@ export default function ReportCard({ report }: { report: Report }) {
           {comments.length === 0 && <p className="text-sm text-slate-400">Noch keine Kommentare.</p>}
           {comments.map((comment) => (
             <div key={comment.id} className="rounded-2xl bg-slate-900/80 p-3">
-              <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                <span className="break-words font-bold text-slate-200">{comment.authorName}</span>
-                <RoleBadge role={comment.authorRole} />
-                <span>{formatRelativeTime(comment.createdAt)}</span>
+              <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
+                {comment.authorUsername ? (
+                  <Link href={`/u/${comment.authorUsername}`} className="shrink-0 rounded-full transition hover:scale-105" aria-label={`Profil von ${comment.authorName} öffnen`}>
+                    <UserAvatar src={comment.authorAvatarDataUrl} name={comment.authorName} size="sm" />
+                  </Link>
+                ) : (
+                  <UserAvatar src={comment.authorAvatarDataUrl} name={comment.authorName} size="sm" />
+                )}
+                <div className="min-w-0 flex flex-wrap items-center gap-2">
+                  {comment.authorUsername ? (
+                    <Link href={`/u/${comment.authorUsername}`} className="break-words font-bold text-slate-200 hover:text-blue-300">
+                      {comment.authorName}
+                    </Link>
+                  ) : (
+                    <span className="break-words font-bold text-slate-200">{comment.authorName}</span>
+                  )}
+                  <RoleBadge role={comment.authorRole} />
+                  <span>{formatRelativeTime(comment.createdAt)}</span>
+                </div>
               </div>
               <p className="overflow-wrap-anywhere whitespace-pre-line break-words text-sm text-slate-200">{comment.text}</p>
             </div>
@@ -202,12 +277,15 @@ export default function ReportCard({ report }: { report: Report }) {
 
           {!banned && user && (
             <form onSubmit={sendComment} className="flex gap-2">
-              <input
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 p-3 text-sm outline-none focus:border-blue-500"
-                placeholder="Kommentar schreiben..."
-              />
+              <div className="min-w-0 flex-1">
+                <MentionTextarea
+                  value={commentText}
+                  onChange={setCommentText}
+                  rows={1}
+                  className="min-h-[48px] w-full resize-none rounded-xl border border-white/10 bg-slate-950 p-3 text-sm outline-none focus:border-blue-500"
+                  placeholder="Kommentar schreiben... @username"
+                />
+              </div>
               <button disabled={sendingComment} className="rounded-xl bg-blue-600 px-4 text-sm font-black disabled:opacity-60">
                 Senden
               </button>

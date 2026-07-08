@@ -1,5 +1,6 @@
 import Image from "next/image";
 import UserStatus from "./UserStatus";
+import NotificationBell from "./NotificationBell";
 
 export default function AppHeader() {
   return (
@@ -14,7 +15,10 @@ export default function AppHeader() {
             <h1 className="truncate text-2xl font-black">COC Live</h1>
           </div>
         </div>
-        <UserStatus />
+        <div className="flex shrink-0 items-center gap-2">
+          <NotificationBell />
+          <UserStatus />
+        </div>
       </div>
     </header>
   );

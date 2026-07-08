@@ -75,6 +75,8 @@ export async function POST(request: Request) {
     const location = String(report.location ?? "").trim();
     const description = String(report.description ?? "").trim();
     const official = report.official === true;
+    const emergency = report.emergency === true;
+    const mentions = Array.isArray(report.mentions) ? report.mentions.map(String) : [];
 
     const tokensSnap = await admin.firestore
       .collection("pushTokens")
@@ -83,13 +85,21 @@ export async function POST(request: Request) {
       .get();
 
     const tokens = tokensSnap.docs
-      .filter((doc) => doc.data().uid !== body.authorId)
+      .filter((doc) => {
+        const data = doc.data();
+        if (data.uid === body.authorId) return false;
+        if (emergency) return data.emergency !== false;
+        if (mentions.length && data.username && mentions.includes(String(data.username)) && data.mentions !== false) return true;
+        if (official && data.official === false) return false;
+        const categories = Array.isArray(data.categories) ? data.categories.map(String) : [];
+        return categories.length === 0 || categories.includes(category);
+      })
       .map((doc) => String(doc.data().token || doc.id))
       .filter(Boolean);
 
     if (tokens.length === 0) return NextResponse.json({ ok: true, sent: 0 });
 
-    const title = official ? "Offizieller Blaulicht-Post" : `Neue Meldung: ${category}`;
+    const title = emergency ? "🚨 EILMELDUNG" : official ? "Offizieller Blaulicht-Post" : `Neue Meldung: ${category}`;
     const bodyText = [location, description].filter(Boolean).join(" · ").slice(0, 130) || "Neue Meldung im Blaulicht Report COC";
 
     const response = await admin.messaging.sendEachForMulticast({

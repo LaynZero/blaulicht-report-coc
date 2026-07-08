@@ -97,7 +97,7 @@ export default function RegisterPage() {
         />
         <input
           className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4 outline-none focus:border-blue-500"
-          placeholder="Benutzername, z. B. max_muster"
+          placeholder="Benutzername, z. B. coc112"
           value={username}
           onChange={(e) => setUsername(normalizeUsername(e.target.value))}
         />

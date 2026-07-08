@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { getToken, onMessage } from "firebase/messaging";
-import { Bell, BellRing, KeyRound } from "lucide-react";
+import { Bell, BellRing, KeyRound, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import { db, getFirebaseMessaging } from "@/app/firebase";
+import { reportCategories } from "@/lib/helpers";
+import type { ReportCategory } from "@/lib/types";
 
 const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "";
 
@@ -14,8 +16,21 @@ export default function PushNotifications() {
   const [supported, setSupported] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [loading, setLoading] = useState(false);
+  const [savingPrefs, setSavingPrefs] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [message, setMessage] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<ReportCategory[]>([]);
+  const [officialEnabled, setOfficialEnabled] = useState(true);
+  const [emergencyEnabled, setEmergencyEnabled] = useState(true);
+  const [mentionsEnabled, setMentionsEnabled] = useState(true);
+
+  useEffect(() => {
+    if (!userData) return;
+    setSelectedCategories(userData.notificationCategories?.length ? userData.notificationCategories : reportCategories.map((item) => item.value));
+    setOfficialEnabled(userData.notificationOfficial ?? true);
+    setEmergencyEnabled(userData.notificationEmergency ?? true);
+    setMentionsEnabled(userData.notificationMentions ?? true);
+  }, [userData]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -25,7 +40,6 @@ export default function PushNotifications() {
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
-
     async function listenForegroundMessages() {
       if (!vapidKey) return;
       const messaging = await getFirebaseMessaging();
@@ -36,47 +50,63 @@ export default function PushNotifications() {
         if (Notification.permission === "granted") new Notification(title, { body, icon: "/icon-192.png" });
       });
     }
-
     listenForegroundMessages();
     return () => unsubscribe?.();
   }, []);
+
+  function toggleCategory(value: ReportCategory) {
+    setSelectedCategories((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+  }
+
+  async function savePreferences() {
+    if (!user || !userData) return;
+    setSavingPrefs(true);
+    try {
+      const prefs = {
+        notificationCategories: selectedCategories,
+        notificationOfficial: officialEnabled,
+        notificationEmergency: emergencyEnabled,
+        notificationMentions: mentionsEnabled,
+        updatedAt: serverTimestamp(),
+      };
+      await updateDoc(doc(db, "users", user.uid), prefs);
+      setMessage("Benachrichtigungsfilter gespeichert.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Filter konnten nicht gespeichert werden.");
+    } finally {
+      setSavingPrefs(false);
+    }
+  }
 
   async function enablePush() {
     setMessage("");
     if (!user || !userData) return setMessage("Bitte zuerst einloggen.");
     if (!supported) return setMessage("Push-Benachrichtigungen werden auf diesem Gerät/Browser nicht unterstützt.");
-    if (!vapidKey) {
-      setMessage("Push ist vorbereitet. Trage zuerst den Web Push VAPID Key in .env.local ein und starte npm run dev neu.");
-      return;
-    }
+    if (!vapidKey) return setMessage("Push ist vorbereitet. Trage zuerst den Web Push VAPID Key in .env.local oder Vercel ein und starte neu.");
 
     setLoading(true);
     try {
       const result = await Notification.requestPermission();
       setPermission(result);
-      if (result !== "granted") {
-        setMessage("Benachrichtigungen wurden nicht erlaubt.");
-        return;
-      }
+      if (result !== "granted") return setMessage("Benachrichtigungen wurden nicht erlaubt.");
 
       const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
       const messaging = await getFirebaseMessaging();
-      if (!messaging) {
-        setMessage("Firebase Messaging wird hier nicht unterstützt.");
-        return;
-      }
+      if (!messaging) return setMessage("Firebase Messaging wird hier nicht unterstützt.");
 
       const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
-      if (!token) {
-        setMessage("Es konnte kein Push-Token erstellt werden.");
-        return;
-      }
+      if (!token) return setMessage("Es konnte kein Push-Token erstellt werden.");
 
       await setDoc(doc(db, "pushTokens", token), {
         token,
         uid: user.uid,
         displayName: userData.displayName,
+        username: userData.username,
         role: userData.role,
+        categories: selectedCategories,
+        official: officialEnabled,
+        emergency: emergencyEnabled,
+        mentions: mentionsEnabled,
         userAgent: navigator.userAgent,
         active: true,
         createdAt: serverTimestamp(),
@@ -84,7 +114,7 @@ export default function PushNotifications() {
       }, { merge: true });
 
       setEnabled(true);
-      setMessage("Push-Benachrichtigungen sind aktiviert. Für echten Versand muss zusätzlich FIREBASE_SERVICE_ACCOUNT_KEY bei Vercel gesetzt sein.");
+      setMessage("Push-Benachrichtigungen sind aktiviert und verwenden deine Filter.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Push konnte nicht aktiviert werden.");
     } finally {
@@ -97,26 +127,31 @@ export default function PushNotifications() {
   return (
     <div className="rounded-3xl border border-blue-400/20 bg-blue-500/10 p-4">
       <div className="flex items-start gap-3">
-        <div className="rounded-2xl bg-blue-600/30 p-3 text-blue-200">
-          {enabled || permission === "granted" ? <BellRing size={22} /> : <Bell size={22} />}
-        </div>
+        <div className="rounded-2xl bg-blue-600/30 p-3 text-blue-200">{enabled || permission === "granted" ? <BellRing size={22} /> : <Bell size={22} />}</div>
         <div className="flex-1">
           <p className="font-black">Push-Benachrichtigungen</p>
-          <p className="mt-1 text-sm text-slate-400">Erhalte Hinweise bei neuen Meldungen, offiziellen Posts oder wichtigen Admin-Infos.</p>
+          <p className="mt-1 text-sm text-slate-400">Erhalte nur die Meldungen, die für dich wichtig sind.</p>
 
-          {!vapidKey && (
-            <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-200">
-              <div className="mb-1 flex items-center gap-2 font-black"><KeyRound size={15} /> Firebase VAPID Key fehlt</div>
-              Firebase Console → Projekteinstellungen → Cloud Messaging → Web Push-Zertifikate. Den Schlüssel lokal in <b>.env.local</b> oder bei Vercel als <b>NEXT_PUBLIC_FIREBASE_VAPID_KEY</b> eintragen und danach neu starten/deployen.
+          <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+            <div className="mb-3 flex items-center gap-2 font-black"><SlidersHorizontal size={17} /> Benachrichtigungsfilter</div>
+            <div className="grid grid-cols-2 gap-2">
+              {reportCategories.map((item) => (
+                <label key={item.value} className="flex items-center gap-2 rounded-xl bg-slate-900 p-3 text-xs font-bold">
+                  <input type="checkbox" checked={selectedCategories.includes(item.value)} onChange={() => toggleCategory(item.value)} /> {item.icon} {item.label}
+                </label>
+              ))}
             </div>
-          )}
+            <div className="mt-3 space-y-2 text-sm">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={officialEnabled} onChange={(e) => setOfficialEnabled(e.target.checked)} /> Offizielle Admin/Entwickler-Posts</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={emergencyEnabled} onChange={(e) => setEmergencyEnabled(e.target.checked)} /> 🚨 Eilmeldungen immer erhalten</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={mentionsEnabled} onChange={(e) => setMentionsEnabled(e.target.checked)} /> Erwähnungen mit @username</label>
+            </div>
+            <button type="button" onClick={savePreferences} disabled={savingPrefs} className="mt-3 w-full rounded-2xl bg-slate-800 py-3 text-sm font-black disabled:opacity-60">{savingPrefs ? "Speichert..." : "Filter speichern"}</button>
+          </div>
 
-          <button
-            type="button"
-            onClick={enablePush}
-            disabled={loading || permission === "denied" || !supported}
-            className="mt-4 w-full rounded-2xl bg-blue-600 py-3 font-black text-white shadow-lg shadow-blue-600/20 disabled:opacity-50"
-          >
+          {!vapidKey && <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-200"><div className="mb-1 flex items-center gap-2 font-black"><KeyRound size={15} /> Firebase VAPID Key fehlt</div>Firebase Console → Projekteinstellungen → Cloud Messaging → Web Push-Zertifikate. Den Schlüssel lokal in <b>.env.local</b> oder bei Vercel als <b>NEXT_PUBLIC_FIREBASE_VAPID_KEY</b> eintragen.</div>}
+
+          <button type="button" onClick={enablePush} disabled={loading || permission === "denied" || !supported} className="mt-4 w-full rounded-2xl bg-blue-600 py-3 font-black text-white shadow-lg shadow-blue-600/20 disabled:opacity-50">
             {loading ? "Wird aktiviert..." : permission === "granted" ? "Push erneut verbinden" : permission === "denied" ? "Im Browser blockiert" : "Push aktivieren"}
           </button>
 

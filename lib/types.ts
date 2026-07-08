@@ -9,10 +9,15 @@ export type AppUser = {
   bio?: string;
   location?: string;
   trustPoints?: number;
+  notificationCategories?: ReportCategory[];
+  notificationOfficial?: boolean;
+  notificationEmergency?: boolean;
+  notificationMentions?: boolean;
   reportsCount?: number;
   confirmationsCount?: number;
   commentsCount?: number;
   banned?: boolean;
+  avatarDataUrl?: string;
   createdAt?: unknown;
 };
 
@@ -27,7 +32,7 @@ export type ReportCategory =
   | "Sonstiges";
 
 export type ReportStatus = "new" | "confirmed" | "expired" | "hidden";
-export type ReportPostType = "report" | "official" | "voice" | "official_voice";
+export type ReportPostType = "report" | "official" | "voice" | "official_voice" | "emergency" | "emergency_voice";
 
 export type Report = {
   id: string;
@@ -37,12 +42,17 @@ export type Report = {
   authorId: string;
   authorName: string;
   authorRole: UserRole;
+  authorUsername?: string;
+  authorAvatarDataUrl?: string;
   confirmations: string[];
   reports: string[];
   commentsCount: number;
   status: ReportStatus;
   pinned?: boolean;
   official?: boolean;
+  emergency?: boolean;
+  imageDataUrl?: string;
+  mentions?: string[];
   postType?: ReportPostType;
   audioDataUrl?: string;
   audioMimeType?: string;
@@ -61,6 +71,9 @@ export type ReportComment = {
   authorId: string;
   authorName: string;
   authorRole: UserRole;
+  authorUsername?: string;
+  authorAvatarDataUrl?: string;
+  mentions?: string[];
   createdAt?: unknown;
 };
 
@@ -93,5 +106,32 @@ export type SupportMessage = {
   authorId: string;
   authorName: string;
   authorRole: UserRole;
+  authorUsername?: string;
+  createdAt?: unknown;
+};
+
+
+export type CrashLog = {
+  id: string;
+  message: string;
+  source?: string;
+  stack?: string;
+  userId?: string;
+  userAgent?: string;
+  url?: string;
+  createdAt?: unknown;
+};
+
+export type AppNotification = {
+  id: string;
+  userId: string;
+  type: "mention" | "admin" | "system" | "reply";
+  title: string;
+  body: string;
+  reportId?: string;
+  source?: "report" | "comment" | "support" | "system";
+  actorId?: string;
+  actorName?: string;
+  read?: boolean;
   createdAt?: unknown;
 };

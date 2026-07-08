@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   addDoc,
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDocs,
@@ -21,11 +22,14 @@ import {
 import BottomNavigation from "@/components/BottomNavigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleBadge from "@/components/ui/RoleBadge";
+import UserAvatar from "@/components/ui/UserAvatar";
 import { useAuth } from "@/app/context/AuthContext";
 import { db } from "@/app/firebase";
 import type {
   AppUser,
+  CrashLog,
   Report,
+  ReportComment,
   SupportMessage,
   SupportTicket,
   UserRole,
@@ -40,6 +44,8 @@ import {
   Shield,
   Trash2,
   UserCog,
+  Activity,
+  Eye,
   Users,
 } from "lucide-react";
 
@@ -200,8 +206,12 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [crashLogs, setCrashLogs] = useState<CrashLog[]>([]);
+  const [selectedReports, setSelectedReports] = useState<Report[]>([]);
+  const [selectedComments, setSelectedComments] = useState<ReportComment[]>([]);
   const [userSearch, setUserSearch] = useState("");
   const [selectedUid, setSelectedUid] = useState("");
+  const [showAllUserActivity, setShowAllUserActivity] = useState(false);
 
   const cleanSearch = userSearch.trim().toLowerCase().replace(/^@/, "");
 
@@ -219,7 +229,10 @@ export default function AdminPage() {
     const unsubUsers = onSnapshot(usersQuery, (snap) => {
       const nextUsers = snap.docs.map((item) => item.data() as AppUser);
       setUsers(nextUsers);
-      setSelectedUid((current) => current || nextUsers[0]?.uid || "");
+      setSelectedUid((current) => {
+        if (current && nextUsers.some((item) => item.uid === current)) return current;
+        return nextUsers[0]?.uid || "";
+      });
     });
 
     return () => unsubUsers();
@@ -270,8 +283,54 @@ export default function AdminPage() {
     return () => unsubTickets();
   }, [userData]);
 
+
+  useEffect(() => {
+    if (userData?.role !== "developer") return;
+    const unsubCrashLogs = onSnapshot(
+      query(collection(db, "crashLogs"), orderBy("createdAt", "desc"), limit(25)),
+      (snap) => setCrashLogs(snap.docs.map((item) => ({ id: item.id, ...item.data() }) as CrashLog)),
+    );
+    return () => unsubCrashLogs();
+  }, [userData?.role]);
+
+  useEffect(() => {
+    setSelectedReports([]);
+    setSelectedComments([]);
+    if (!selectedUid) return;
+
+    const activityLimit = showAllUserActivity ? 500 : 20;
+    const targetUid = selectedUid;
+    let active = true;
+
+    const unsubUserReports = onSnapshot(
+      query(collection(db, "reports"), where("authorId", "==", targetUid), limit(activityLimit)),
+      (snap) => {
+        if (!active) return;
+        const nextReports = snap.docs.map((item) => ({ id: item.id, ...item.data() }) as Report);
+        nextReports.sort((a, b) => Number((b.createdAt as { seconds?: number })?.seconds ?? 0) - Number((a.createdAt as { seconds?: number })?.seconds ?? 0));
+        setSelectedReports(nextReports);
+      },
+    );
+
+    const unsubUserComments = onSnapshot(
+      query(collectionGroup(db, "comments"), where("authorId", "==", targetUid), limit(activityLimit)),
+      (snap) => {
+        if (!active) return;
+        const nextComments = snap.docs.map((item) => ({ id: item.id, ...item.data() }) as ReportComment);
+        nextComments.sort((a, b) => Number((b.createdAt as { seconds?: number })?.seconds ?? 0) - Number((a.createdAt as { seconds?: number })?.seconds ?? 0));
+        setSelectedComments(nextComments);
+      },
+    );
+
+    return () => {
+      active = false;
+      unsubUserReports();
+      unsubUserComments();
+    };
+  }, [selectedUid, showAllUserActivity]);
+
   const selectedUser = useMemo(
-    () => users.find((item) => item.uid === selectedUid) ?? users[0],
+    () => users.find((item) => item.uid === selectedUid),
     [selectedUid, users],
   );
   const flaggedReports = useMemo(
@@ -279,6 +338,9 @@ export default function AdminPage() {
     [reports],
   );
   const canManageRoles = userData?.role === "developer";
+  const todayReports = reports.filter((report) => Number((report.createdAt as { seconds?: number })?.seconds ?? 0) * 1000 > Date.now() - 86400000).length;
+  const emergencyReports = reports.filter((report) => report.emergency).length;
+  const totalCommentsLoaded = reports.reduce((sum, report) => sum + (report.commentsCount ?? 0), 0);
 
   async function setRole(uid: string, role: UserRole) {
     if (!canManageRoles) return alert("Nur Entwickler dürfen Rollen ändern.");
@@ -363,6 +425,9 @@ export default function AdminPage() {
                   onChange={(e) => {
                     setUserSearch(e.target.value);
                     setSelectedUid("");
+                    setShowAllUserActivity(false);
+                    setSelectedReports([]);
+                    setSelectedComments([]);
                   }}
                   placeholder="@benutzername suchen..."
                   className="w-full rounded-2xl border border-white/10 bg-slate-950 py-4 pl-11 pr-4 text-sm outline-none transition focus:border-blue-500"
@@ -370,8 +435,13 @@ export default function AdminPage() {
               </label>
 
               <select
-                value={selectedUser?.uid ?? ""}
-                onChange={(e) => setSelectedUid(e.target.value)}
+                value={selectedUid}
+                onChange={(e) => {
+                  setSelectedUid(e.target.value);
+                  setShowAllUserActivity(false);
+                  setSelectedReports([]);
+                  setSelectedComments([]);
+                }}
                 className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950 p-4 text-sm font-bold outline-none focus:border-blue-500"
               >
                 {users.length === 0 && (
@@ -400,7 +470,9 @@ export default function AdminPage() {
               ) : (
                 <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <UserAvatar src={selectedUser.avatarDataUrl} name={selectedUser.displayName} size="lg" />
+                      <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="break-words text-2xl font-black">
                           {selectedUser.displayName}
@@ -413,6 +485,7 @@ export default function AdminPage() {
                       <p className="mt-1 break-all text-xs text-slate-500">
                         {selectedUser.email}
                       </p>
+                    </div>
                     </div>
                     <span
                       className={`w-fit rounded-full px-3 py-1 text-xs font-black ${selectedUser.banned ? "bg-red-500/15 text-red-300" : "bg-green-500/15 text-green-300"}`}
@@ -466,6 +539,50 @@ export default function AdminPage() {
                       <option value="admin">Admin</option>
                       <option value="developer">Entwickler</option>
                     </select>
+                  </div>
+
+                  <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-black">Aktivität des Nutzers</p>
+                      <p className="text-xs text-slate-400">{showAllUserActivity ? "Bis zu 500 Beiträge und Kommentare werden geladen." : "Es werden nur die letzten 20 Beiträge und Kommentare geladen."}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReports([]);
+                        setSelectedComments([]);
+                        setShowAllUserActivity((value) => !value);
+                      }}
+                      className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500"
+                    >
+                      {showAllUserActivity ? "Nur letzte anzeigen" : "Alle anzeigen"}
+                    </button>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-2xl bg-slate-900 p-4">
+                      <h3 className="mb-3 flex items-center gap-2 font-black"><Eye size={16} /> {showAllUserActivity ? "Beiträge" : "Letzte Beiträge"} <span className="text-xs text-slate-500">({selectedReports.length})</span></h3>
+                      <div className="max-h-72 space-y-2 overflow-y-auto">
+                        {selectedReports.length === 0 && <p className="text-sm text-slate-500">Keine Beiträge gefunden.</p>}
+                        {selectedReports.map((report) => (
+                          <div key={report.id} className="rounded-xl bg-slate-950/70 p-3">
+                            <p className="text-xs font-bold text-blue-300">{report.emergency ? "🚨 Eilmeldung" : report.category} · {report.location || "Ohne Ort"}</p>
+                            <p className="mt-1 line-clamp-3 break-words text-sm text-slate-300">{report.description || "Audio/Bild-Beitrag"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900 p-4">
+                      <h3 className="mb-3 flex items-center gap-2 font-black"><MessageCircle size={16} /> {showAllUserActivity ? "Kommentare" : "Letzte Kommentare"} <span className="text-xs text-slate-500">({selectedComments.length})</span></h3>
+                      <div className="max-h-72 space-y-2 overflow-y-auto">
+                        {selectedComments.length === 0 && <p className="text-sm text-slate-500">Keine Kommentare gefunden.</p>}
+                        {selectedComments.map((comment) => (
+                          <div key={comment.id} className="rounded-xl bg-slate-950/70 p-3">
+                            <p className="line-clamp-4 break-words text-sm text-slate-300">{comment.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -534,15 +651,41 @@ export default function AdminPage() {
               <div className="flex items-center gap-3">
                 <BarChart3 className="text-blue-400" />
                 <div>
-                  <h2 className="text-xl font-black">Statistiken</h2>
-                  <p className="text-sm text-slate-400">
-                    Live aus Firestore: geladene Nutzer, letzte Meldungen und
-                    gemeldete Beiträge.
-                  </p>
+                  <h2 className="text-xl font-black">Entwickler Analytics</h2>
+                  <p className="text-sm text-slate-400">Live-Auswertung der geladenen Daten.</p>
                 </div>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-slate-950/70 p-4"><p className="text-2xl font-black">{todayReports}</p><p className="text-xs text-slate-400">Beiträge 24h</p></div>
+                <div className="rounded-2xl bg-slate-950/70 p-4"><p className="text-2xl font-black">{emergencyReports}</p><p className="text-xs text-slate-400">Eilmeldungen</p></div>
+                <div className="rounded-2xl bg-slate-950/70 p-4"><p className="text-2xl font-black">{totalCommentsLoaded}</p><p className="text-xs text-slate-400">Kommentare geladen</p></div>
+                <div className="rounded-2xl bg-slate-950/70 p-4"><p className="text-2xl font-black">{crashLogs.length}</p><p className="text-xs text-slate-400">Crashlogs</p></div>
               </div>
             </div>
           </div>
+
+          {userData?.role === "developer" && (
+            <div className="mt-6 glass-card rounded-3xl p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <Activity className="text-red-300" />
+                <div>
+                  <h2 className="text-xl font-black">Crashlogs</h2>
+                  <p className="text-sm text-slate-400">Automatisch erfasste Browser-Fehler der Nutzer.</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {crashLogs.length === 0 && <p className="rounded-2xl bg-slate-950/60 p-4 text-sm text-slate-400">Keine Crashlogs vorhanden.</p>}
+                {crashLogs.map((log) => (
+                  <div key={log.id} className="rounded-2xl bg-slate-950/70 p-4">
+                    <p className="break-words font-bold text-red-200">{log.message}</p>
+                    <p className="mt-1 break-all text-xs text-slate-500">{log.url}</p>
+                    {log.stack && <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/40 p-3 text-[11px] text-slate-400">{log.stack}</pre>}
+                    <button onClick={() => deleteDoc(doc(db, "crashLogs", log.id))} className="mt-3 rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-slate-300">Log löschen</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
         <BottomNavigation />
       </main>

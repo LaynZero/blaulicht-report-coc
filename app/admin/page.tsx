@@ -24,7 +24,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleBadge from "@/components/ui/RoleBadge";
 import UserAvatar from "@/components/ui/UserAvatar";
 import { useAuth } from "@/app/context/AuthContext";
-import { db } from "@/app/firebase";
+import { auth, db } from "@/app/firebase";
 import type {
   AppUser,
   CrashLog,
@@ -337,20 +337,77 @@ export default function AdminPage() {
     () => reports.filter((report) => (report.reports ?? []).length > 0),
     [reports],
   );
-  const canManageRoles = userData?.role === "developer";
+  const canManageRoles = userData?.role === "admin" || userData?.role === "developer";
+  const isDeveloperMode = userData?.role === "developer";
   const todayReports = reports.filter((report) => Number((report.createdAt as { seconds?: number })?.seconds ?? 0) * 1000 > Date.now() - 86400000).length;
   const emergencyReports = reports.filter((report) => report.emergency).length;
   const totalCommentsLoaded = reports.reduce((sum, report) => sum + (report.commentsCount ?? 0), 0);
 
   async function setRole(uid: string, role: UserRole) {
-    if (!canManageRoles) return alert("Nur Entwickler dürfen Rollen ändern.");
-    await updateDoc(doc(db, "users", uid), { role });
+    if (!canManageRoles) return alert("Nur Admins und Entwickler dürfen Rollen ändern.");
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Du bist nicht angemeldet.");
+
+      const response = await fetch(`/api/admin/users/${uid}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role }),
+      });
+
+      const result = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message || "Rolle konnte nicht geändert werden.");
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Rolle konnte nicht geändert werden.");
+    }
   }
 
   async function toggleBan(appUser: AppUser) {
     if (appUser.role === "developer")
       return alert("Entwickler können nicht gesperrt werden.");
     await updateDoc(doc(db, "users", appUser.uid), { banned: !appUser.banned });
+  }
+
+  async function deleteUserAccount(appUser: AppUser) {
+    if (appUser.role === "developer") {
+      return alert("Entwickler können nicht gelöscht werden.");
+    }
+
+    if (appUser.role === "admin") {
+      return alert("Admins können nicht direkt gelöscht werden. Entziehe zuerst die Admin-Rolle.");
+    }
+
+    if (!confirm(`Nutzer @${appUser.username} wirklich löschen? Beiträge, Kommentare, Push-Tokens und der Login-Account werden entfernt.`)) {
+      return;
+    }
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Du bist nicht angemeldet.");
+
+      const response = await fetch(`/api/admin/users/${appUser.uid}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const result = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message || "Nutzer konnte nicht gelöscht werden.");
+      }
+
+      setSelectedUid("");
+      setSelectedReports([]);
+      setSelectedComments([]);
+      alert("Nutzer wurde gelöscht.");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Nutzer konnte nicht gelöscht werden.");
+    }
   }
 
   async function deleteReport(reportId: string) {
@@ -374,7 +431,7 @@ export default function AdminPage() {
               </p>
             </div>
             <div className="rounded-3xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-200">
-              {canManageRoles ? "💻 Entwickler-Modus" : "🛡️ Admin-Modus"}
+              {isDeveloperMode ? "💻 Entwickler-Modus" : "🛡️ Admin-Modus"}
             </div>
           </div>
 
@@ -463,6 +520,7 @@ export default function AdminPage() {
 
             <div className="glass-card rounded-3xl p-5">
               <h2 className="mb-4 text-xl font-black">👥 Nutzerverwaltung</h2>
+              <p className="mb-4 rounded-2xl border border-blue-400/15 bg-blue-500/10 p-3 text-xs leading-relaxed text-blue-100">Admins können User zu Admins machen und Admin-Rechte wieder entfernen. Entwickler sind geschützt. Admins müssen vor dem Löschen zuerst wieder zu normalen Usern gemacht werden.</p>
               {!selectedUser ? (
                 <p className="rounded-2xl bg-slate-950/60 p-4 text-sm text-slate-400">
                   Suche einen Nutzer oder wähle einen Treffer aus.
@@ -515,7 +573,7 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
                     <button
                       disabled={selectedUser.role === "developer"}
                       onClick={() => toggleBan(selectedUser)}
@@ -528,7 +586,7 @@ export default function AdminPage() {
                           : "Nutzer sperren"}
                     </button>
                     <select
-                      disabled={!canManageRoles}
+                      disabled={!canManageRoles || selectedUser.role === "developer"}
                       value={selectedUser.role}
                       onChange={(e) =>
                         setRole(selectedUser.uid, e.target.value as UserRole)
@@ -537,8 +595,26 @@ export default function AdminPage() {
                     >
                       <option value="user">User</option>
                       <option value="admin">Admin</option>
-                      <option value="developer">Entwickler</option>
+                      {isDeveloperMode && <option value="developer">Entwickler</option>}
                     </select>
+                    <button
+                      disabled={selectedUser.role !== "user"}
+                      onClick={() => deleteUserAccount(selectedUser)}
+                      className="rounded-2xl border border-red-400/30 bg-red-500/10 py-4 text-sm font-black text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
+                      title={
+                        selectedUser.role === "admin"
+                          ? "Erst Admin-Rolle entziehen"
+                          : selectedUser.role === "developer"
+                            ? "Entwickler geschützt"
+                            : "Nutzer löschen"
+                      }
+                    >
+                      {selectedUser.role === "admin"
+                        ? "Erst Admin entziehen"
+                        : selectedUser.role === "developer"
+                          ? "Geschützt"
+                          : "Nutzer löschen"}
+                    </button>
                   </div>
 
                   <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900 p-4 sm:flex-row sm:items-center sm:justify-between">

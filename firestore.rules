@@ -29,6 +29,18 @@ service cloud.firestore {
       return !(resource.data.role == "developer" && request.resource.data.banned == true);
     }
 
+    function roleIsUserOrAdmin(role) {
+      return role == "user" || role == "admin";
+    }
+
+    function adminCanUpdateUser() {
+      return signedIn()
+        && myRole() == "admin"
+        && resource.data.role != "developer"
+        && roleIsUserOrAdmin(request.resource.data.role)
+        && request.resource.data.role != "developer";
+    }
+
     function canReadTicket() {
       return signedIn() && (
         resource.data.createdBy == request.auth.uid ||
@@ -76,9 +88,10 @@ service cloud.firestore {
           request.resource.data.role == resource.data.role &&
           request.resource.data.banned == resource.data.banned
         ) ||
-        (isAdmin() && developerNotBannedByUpdate())
+        (isDeveloper() && developerNotBannedByUpdate()) ||
+        (adminCanUpdateUser() && developerNotBannedByUpdate())
       );
-      allow delete: if isDeveloper() && resource.data.role != "developer";
+      allow delete: if isDeveloper() && resource.data.role == "user";
     }
 
     match /usernames/{username} {

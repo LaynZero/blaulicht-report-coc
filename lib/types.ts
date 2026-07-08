@@ -43,7 +43,10 @@ export type Report = {
   authorRole: UserRole;
   authorUsername?: string;
   authorAvatarDataUrl?: string;
-  confirmations: string[];
+  /** Legacy/compat: wird nicht mehr für neue Status-Aktionen genutzt. */
+  confirmations?: string[];
+  confirmedBy?: string[];
+  outdatedBy?: string[];
   reports: string[];
   commentsCount: number;
   status: ReportStatus;

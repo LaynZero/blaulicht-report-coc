@@ -15,7 +15,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { Flag, MapPin, MessageCircle, Mic, Navigation, ShieldCheck, Trash2 } from "lucide-react";
+import { CheckCircle2, Flag, MapPin, MessageCircle, Mic, Navigation, ShieldCheck, Trash2 } from "lucide-react";
 import { db } from "@/app/firebase";
 import { useAuth } from "@/app/context/AuthContext";
 import { categoryEmoji, extractMentions, formatRelativeTime } from "@/lib/helpers";
@@ -46,7 +46,10 @@ export default function ReportCard({ report }: { report: Report }) {
 
   const canModerate = userData?.role === "admin" || userData?.role === "developer";
   const banned = userData?.banned === true;
-  const markedOutdated = user ? report.confirmations?.includes(user.uid) : false;
+  const legacyOutdatedBy = report.outdatedBy ?? report.confirmations ?? [];
+  const confirmedBy = report.confirmedBy ?? [];
+  const markedConfirmed = user ? confirmedBy.includes(user.uid) : false;
+  const markedOutdated = user ? legacyOutdatedBy.includes(user.uid) : false;
   const flagged = user ? report.reports?.includes(user.uid) : false;
   const isVoice = Boolean(report.audioDataUrl);
   const isOfficial = Boolean(report.official);
@@ -74,19 +77,48 @@ export default function ReportCard({ report }: { report: Report }) {
     return true;
   }
 
-  async function markOutdated() {
+  async function markConfirmed() {
     if (!ensureCanWrite()) return;
-    const confirmations = report.confirmations ?? [];
-    const next = markedOutdated ? confirmations.filter((id) => id !== user!.uid) : [...confirmations, user!.uid];
-    const nextStatus = canModerate || next.length >= 2 ? "expired" : "new";
+    const nextConfirmedBy = markedConfirmed
+      ? confirmedBy.filter((id) => id !== user!.uid)
+      : [...confirmedBy, user!.uid];
+    const nextOutdatedBy = legacyOutdatedBy.filter((id) => id !== user!.uid);
+    const nextStatus = nextOutdatedBy.length >= 2 ? "expired" : nextConfirmedBy.length >= 2 ? "confirmed" : "new";
+
     try {
       await updateDoc(doc(db, "reports", report.id), {
-        confirmations: next,
+        confirmedBy: nextConfirmedBy,
+        outdatedBy: nextOutdatedBy,
         status: nextStatus,
         updatedAt: serverTimestamp(),
       });
       await updateDoc(doc(db, "users", user!.uid), {
-        confirmationsCount: increment(markedOutdated ? -1 : 1),
+        confirmationsCount: increment(markedConfirmed ? -1 : 1),
+        trustPoints: increment(markedConfirmed ? -1 : 1),
+      });
+    } catch {
+      alert("Aktion nicht erlaubt. Falls dein Account gerade gesperrt wurde, lade die App bitte neu.");
+    }
+  }
+
+  async function markOutdated() {
+    if (!ensureCanWrite()) return;
+    const nextOutdatedBy = markedOutdated
+      ? legacyOutdatedBy.filter((id) => id !== user!.uid)
+      : [...legacyOutdatedBy, user!.uid];
+    const nextConfirmedBy = confirmedBy.filter((id) => id !== user!.uid);
+    const nextStatus = canModerate || nextOutdatedBy.length >= 2 ? "expired" : nextConfirmedBy.length >= 2 ? "confirmed" : "new";
+
+    try {
+      await updateDoc(doc(db, "reports", report.id), {
+        confirmedBy: nextConfirmedBy,
+        outdatedBy: nextOutdatedBy,
+        // Legacy-Feld leeren, damit nach dem Update keine alte Auswahl mehr als "nicht mehr aktuell" zählt.
+        confirmations: [],
+        status: nextStatus,
+        updatedAt: serverTimestamp(),
+      });
+      await updateDoc(doc(db, "users", user!.uid), {
         trustPoints: increment(markedOutdated ? -1 : 1),
       });
     } catch {
@@ -160,7 +192,7 @@ export default function ReportCard({ report }: { report: Report }) {
     if (comment.authorId) await updateDoc(doc(db, "users", comment.authorId), { commentsCount: increment(-1) }).catch(() => undefined);
   }
 
-  const statusText = report.status === "expired" ? "Nicht mehr aktuell" : "Aktiv";
+  const statusText = report.status === "expired" ? "Nicht mehr aktuell" : report.status === "confirmed" ? "Bestätigt" : "Aktiv";
   const officialText = report.authorRole === "developer" ? "Entwickler-Post" : "Admin-Post";
 
   return (
@@ -249,7 +281,7 @@ export default function ReportCard({ report }: { report: Report }) {
       <div className="mt-4 rounded-2xl bg-slate-950/60 p-3 text-sm">
         <div className={report.status === "expired" ? "flex items-center gap-2 text-slate-400" : "flex items-center gap-2 text-green-400"}>
           <ShieldCheck size={17} />
-          {isEmergency ? "Eilmeldung" : statusText} · {(report.confirmations ?? []).length}× als nicht mehr aktuell gemeldet
+          {isEmergency ? "Eilmeldung" : statusText} · {confirmedBy.length}× bestätigt · {legacyOutdatedBy.length}× nicht mehr aktuell
         </div>
       </div>
 
@@ -259,7 +291,10 @@ export default function ReportCard({ report }: { report: Report }) {
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
+      <div className="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+        <button onClick={markConfirmed} disabled={banned || report.status === "expired"} className={`flex items-center justify-center gap-1 rounded-xl py-3 font-bold disabled:opacity-40 ${markedConfirmed ? "bg-green-600 text-white" : "bg-slate-800 text-slate-200"}`}>
+          <CheckCircle2 size={16} /> {markedConfirmed ? "Bestätigt" : "Bestätigen"}
+        </button>
         <button onClick={markOutdated} disabled={banned || report.status === "expired"} className={`rounded-xl py-3 font-bold disabled:opacity-40 ${markedOutdated || report.status === "expired" ? "bg-slate-600 text-white" : "bg-slate-800 text-slate-200"}`}>
           ⏱️ {report.status === "expired" ? "Nicht mehr aktuell" : markedOutdated ? "Gemeldet" : "Nicht mehr aktuell"}
         </button>

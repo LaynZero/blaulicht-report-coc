@@ -180,7 +180,7 @@ export default function ProfilePage() {
 
           <div className="mt-5 grid grid-cols-3 gap-3">
             <div className="glass-card rounded-2xl p-4 text-center"><Siren className="mx-auto mb-2 text-blue-400" size={22} /><p className="text-xl font-bold">{userData?.reportsCount ?? 0}</p><p className="text-xs text-slate-400">Beiträge</p></div>
-            <div className="glass-card rounded-2xl p-4 text-center"><Shield className="mx-auto mb-2 text-green-400" size={22} /><p className="text-xl font-bold">{userData?.confirmationsCount ?? 0}</p><p className="text-xs text-slate-400">Nicht aktuell</p></div>
+            <div className="glass-card rounded-2xl p-4 text-center"><Shield className="mx-auto mb-2 text-green-400" size={22} /><p className="text-xl font-bold">{userData?.confirmationsCount ?? 0}</p><p className="text-xs text-slate-400">Bestätigungen</p></div>
             <div className="glass-card rounded-2xl p-4 text-center"><MessageCircle className="mx-auto mb-2 text-purple-400" size={22} /><p className="text-xl font-bold">{userData?.commentsCount ?? 0}</p><p className="text-xs text-slate-400">Kommentare</p></div>
           </div>
 

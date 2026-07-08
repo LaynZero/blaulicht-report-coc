@@ -18,7 +18,7 @@ messaging.onBackgroundMessage((payload) => {
     body: payload.notification?.body || "Neue Meldung in der App",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
-    data: payload.data || {},
+    data: { url: payload.data?.url || (payload.data?.reportId ? `/report/${payload.data.reportId}` : "/"), ...(payload.data || {}) },
   };
 
   self.registration.showNotification(title, options);
@@ -26,5 +26,15 @@ messaging.onBackgroundMessage((payload) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  event.waitUntil(clients.openWindow("/"));
+  const url = event.notification?.data?.url || "/";
+  event.waitUntil((async () => {
+    const allClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of allClients) {
+      if ("focus" in client) {
+        client.navigate(url);
+        return client.focus();
+      }
+    }
+    return clients.openWindow(url);
+  })());
 });

@@ -110,7 +110,8 @@ export default function ProfilePage() {
         });
       }
 
-      await updateProfile(user, { displayName: cleanName, photoURL: avatarDataUrl || null });
+      // Profilbilder speichern wir in Firestore. Firebase Auth photoURL darf keine langen Base64-Bilder enthalten.
+      await updateProfile(user, { displayName: cleanName });
       await refreshUserData();
       alert("Profil gespeichert.");
     } catch (err) {

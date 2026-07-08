@@ -82,7 +82,7 @@ export default function NotificationBell() {
             {items.map((item) => (
               <Link
                 key={item.id}
-                href={item.reportId ? "/" : "/support"}
+                href={item.reportId ? `/report/${item.reportId}` : "/support"}
                 onClick={async () => {
                   setOpen(false);
                   if (!item.read) await updateDoc(doc(db, "notifications", item.id), { read: true });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { getToken, onMessage } from "firebase/messaging";
 import { Bell, BellRing, KeyRound, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
@@ -19,6 +19,7 @@ export default function PushNotifications() {
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [message, setMessage] = useState("");
+  const [testing, setTesting] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<ReportCategory[]>([]);
   const [officialEnabled, setOfficialEnabled] = useState(true);
   const [emergencyEnabled, setEmergencyEnabled] = useState(true);
@@ -47,7 +48,15 @@ export default function PushNotifications() {
       unsubscribe = onMessage(messaging, (payload) => {
         const title = payload.notification?.title || "Blaulicht Report COC";
         const body = payload.notification?.body || "Neue Meldung in der App";
-        if (Notification.permission === "granted") new Notification(title, { body, icon: "/icon-192.png" });
+        if (Notification.permission === "granted") {
+          const url = payload.data?.url || (payload.data?.reportId ? `/report/${payload.data.reportId}` : "/");
+          const notification = new Notification(title, { body, icon: "/icon-192.png", data: { url } });
+          notification.onclick = () => {
+            window.focus();
+            window.location.href = url;
+            notification.close();
+          };
+        }
       });
     }
     listenForegroundMessages();
@@ -70,6 +79,16 @@ export default function PushNotifications() {
         updatedAt: serverTimestamp(),
       };
       await updateDoc(doc(db, "users", user.uid), prefs);
+
+      const tokensSnap = await getDocs(query(collection(db, "pushTokens"), where("uid", "==", user.uid)));
+      await Promise.all(tokensSnap.docs.map((tokenDoc) => updateDoc(doc(db, "pushTokens", tokenDoc.id), {
+        categories: selectedCategories,
+        official: officialEnabled,
+        emergency: emergencyEnabled,
+        mentions: mentionsEnabled,
+        updatedAt: serverTimestamp(),
+      })));
+
       setMessage("Benachrichtigungsfilter gespeichert.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Filter konnten nicht gespeichert werden.");
@@ -122,6 +141,26 @@ export default function PushNotifications() {
     }
   }
 
+  async function sendTestPush() {
+    if (!user) return;
+    setTesting(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/push/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: user.uid }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.message || "Test-Push konnte nicht gesendet werden.");
+      setMessage(data.sent > 0 ? "Test-Push wurde gesendet." : "Kein Push wurde gesendet. Prüfe Service Account und Token.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Test-Push konnte nicht gesendet werden.");
+    } finally {
+      setTesting(false);
+    }
+  }
+
   if (!userData) return null;
 
   return (
@@ -154,6 +193,12 @@ export default function PushNotifications() {
           <button type="button" onClick={enablePush} disabled={loading || permission === "denied" || !supported} className="mt-4 w-full rounded-2xl bg-blue-600 py-3 font-black text-white shadow-lg shadow-blue-600/20 disabled:opacity-50">
             {loading ? "Wird aktiviert..." : permission === "granted" ? "Push erneut verbinden" : permission === "denied" ? "Im Browser blockiert" : "Push aktivieren"}
           </button>
+
+          {permission === "granted" && (
+            <button type="button" onClick={sendTestPush} disabled={testing} className="mt-3 w-full rounded-2xl bg-slate-800 py-3 text-sm font-black text-white disabled:opacity-60">
+              {testing ? "Test wird gesendet..." : "Test-Push senden"}
+            </button>
+          )}
 
           {message && <p className="mt-3 rounded-2xl bg-slate-950/50 p-3 text-xs text-slate-300">{message}</p>}
         </div>

@@ -23,6 +23,7 @@ import type { Report, ReportComment } from "@/lib/types";
 import RoleBadge from "@/components/ui/RoleBadge";
 import UserAvatar from "@/components/ui/UserAvatar";
 import MentionTextarea from "@/components/MentionTextarea";
+import MentionedText from "@/components/MentionedText";
 import { createMentionNotifications } from "@/lib/notifications";
 
 function getRouteUrl(report: Report) {
@@ -41,6 +42,7 @@ export default function ReportCard({ report }: { report: Report }) {
   const [comments, setComments] = useState<ReportComment[]>([]);
   const [commentText, setCommentText] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
 
   const canModerate = userData?.role === "admin" || userData?.role === "developer";
   const banned = userData?.banned === true;
@@ -151,6 +153,7 @@ export default function ReportCard({ report }: { report: Report }) {
   const officialText = report.authorRole === "developer" ? "Entwickler-Post" : "Admin-Post";
 
   return (
+    <>
     <article className={`glass-card overflow-hidden rounded-3xl p-5 ${isEmergency ? "border-red-400/70 shadow-lg shadow-red-600/10" : isOfficial ? "border-blue-400/40" : ""}`}>
       {isEmergency && (
         <div className="mb-4 rounded-2xl border border-red-400/40 bg-red-600/20 p-3 text-sm font-black text-red-100">
@@ -198,10 +201,28 @@ export default function ReportCard({ report }: { report: Report }) {
         </div>
       </div>
 
-      {report.description && <p className="overflow-wrap-anywhere whitespace-pre-line break-words text-slate-300">{report.description}</p>}
+      {report.mentions?.includes(userData?.username || "") && (
+        <div className="mb-3 rounded-2xl border border-blue-300/25 bg-blue-500/10 p-3 text-sm font-bold text-blue-100">
+          @DuDu wurdest in dieser Meldung erwähnt.
+        </div>
+      )}
+
+      {report.description && (
+        <p className="overflow-wrap-anywhere whitespace-pre-line break-words text-slate-300">
+          <MentionedText text={report.description} currentUsername={userData?.username} />
+        </p>
+      )}
 
       {report.imageDataUrl && (
-        <img src={report.imageDataUrl} alt="Beitragsfoto" className="mt-4 max-h-[420px] w-full rounded-2xl object-cover" loading="lazy" />
+        <button
+          type="button"
+          onClick={() => setImagePreviewOpen(true)}
+          className="mt-4 block w-full overflow-hidden rounded-2xl border border-white/10 bg-slate-950/40 text-left transition hover:border-blue-400/50"
+          aria-label="Beitragsfoto in voller Größe öffnen"
+        >
+          <img src={report.imageDataUrl} alt="Beitragsfoto" className="max-h-[420px] w-full object-cover" loading="lazy" />
+          <span className="block px-3 py-2 text-xs font-bold text-slate-400">Zum Vergrößern antippen</span>
+        </button>
       )}
 
       {isVoice && (
@@ -271,7 +292,14 @@ export default function ReportCard({ report }: { report: Report }) {
                   <span>{formatRelativeTime(comment.createdAt)}</span>
                 </div>
               </div>
-              <p className="overflow-wrap-anywhere whitespace-pre-line break-words text-sm text-slate-200">{comment.text}</p>
+              {comment.mentions?.includes(userData?.username || "") && (
+                <div className="mb-2 rounded-xl border border-blue-300/20 bg-blue-500/10 px-3 py-2 text-xs font-bold text-blue-100">
+                  Du wurdest hier erwähnt.
+                </div>
+              )}
+              <p className="overflow-wrap-anywhere whitespace-pre-line break-words text-sm text-slate-200">
+                <MentionedText text={comment.text} currentUsername={userData?.username} />
+              </p>
             </div>
           ))}
 
@@ -305,5 +333,30 @@ export default function ReportCard({ report }: { report: Report }) {
         )}
       </div>
     </article>
+
+    {imagePreviewOpen && report.imageDataUrl && (
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+        onClick={() => setImagePreviewOpen(false)}
+        role="dialog"
+        aria-modal="true"
+      >
+        <button
+          type="button"
+          onClick={() => setImagePreviewOpen(false)}
+          className="absolute right-4 top-4 rounded-full bg-white/10 px-4 py-2 text-2xl font-black text-white backdrop-blur hover:bg-white/20"
+          aria-label="Bild schließen"
+        >
+          ×
+        </button>
+        <img
+          src={report.imageDataUrl}
+          alt="Beitragsfoto in voller Größe"
+          className="max-h-[90vh] max-w-full rounded-2xl object-contain shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+        />
+      </div>
+    )}
+    </>
   );
 }

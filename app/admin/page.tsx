@@ -52,11 +52,13 @@ import {
   Wrench,
   Save,
 } from "lucide-react";
+import { DEFAULT_GROUP_RULES } from "@/lib/helpers";
 
 const defaultAppSettings: AppSettings = {
   maintenanceMode: false,
   allowAdminsDuringMaintenance: true,
   maintenanceMessage: "Wir führen gerade Wartungsarbeiten durch. Bitte versuche es gleich noch einmal.",
+  groupRules: DEFAULT_GROUP_RULES,
 };
 
 function SupportTicketPanel({ ticket }: { ticket: SupportTicket }) {
@@ -306,7 +308,7 @@ export default function AdminPage() {
   }, [userData?.role]);
 
   useEffect(() => {
-    if (userData?.role !== "developer") return;
+    if (userData?.role !== "developer" && userData?.role !== "admin") return;
     const unsubSettings = onSnapshot(doc(db, "appSettings", "main"), (snap) => {
       setAppSettings(snap.exists() ? ({ ...defaultAppSettings, ...snap.data() } as AppSettings) : defaultAppSettings);
     });
@@ -380,6 +382,29 @@ export default function AdminPage() {
       );
     } catch (err) {
       alert(err instanceof Error ? err.message : "Wartungsmodus konnte nicht gespeichert werden.");
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+
+  async function saveGroupRules() {
+    if (userData?.role !== "developer" && userData?.role !== "admin") return alert("Nur Admins und Entwickler dürfen die Gruppenregeln ändern.");
+    setSavingSettings(true);
+    try {
+      const groupRules = (appSettings.groupRules || DEFAULT_GROUP_RULES).trim();
+      if (groupRules.length < 20) return alert("Bitte gib gültige Gruppenregeln ein.");
+      await setDoc(
+        doc(db, "appSettings", "main"),
+        {
+          groupRules,
+          updatedAt: serverTimestamp(),
+          updatedBy: userData.uid,
+        },
+        { merge: true },
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gruppenregeln konnten nicht gespeichert werden.");
     } finally {
       setSavingSettings(false);
     }
@@ -773,6 +798,39 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          <div className="mt-6 glass-card rounded-3xl p-5">
+            <div className="mb-4 flex items-center gap-3">
+              <Shield className="text-blue-300" />
+              <div>
+                <h2 className="text-xl font-black">Gruppenregeln</h2>
+                <p className="text-sm text-slate-400">Diese Regeln werden bei der Registrierung angezeigt und sind im Info-Tab jederzeit nachlesbar.</p>
+              </div>
+            </div>
+            <textarea
+              value={appSettings.groupRules || DEFAULT_GROUP_RULES}
+              onChange={(e) => setAppSettings((current) => ({ ...current, groupRules: e.target.value }))}
+              rows={14}
+              className="w-full resize-y rounded-2xl border border-white/10 bg-slate-950 p-4 text-sm leading-relaxed outline-none focus:border-blue-500"
+            />
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                disabled={savingSettings}
+                onClick={saveGroupRules}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black disabled:opacity-60"
+              >
+                <Save size={16} /> Regeln speichern
+              </button>
+              <button
+                type="button"
+                onClick={() => setAppSettings((current) => ({ ...current, groupRules: DEFAULT_GROUP_RULES }))}
+                className="rounded-2xl bg-slate-800 px-4 py-3 text-sm font-black text-slate-200"
+              >
+                Standardregeln einsetzen
+              </button>
             </div>
           </div>
 

@@ -7,7 +7,7 @@ import BottomNavigation from "@/components/BottomNavigation";
 import AppHeader from "@/components/AppHeader";
 import ReportCard from "@/components/feed/ReportCard";
 import { db } from "./firebase";
-import { reportCategories } from "@/lib/helpers";
+import { isExpiredArchived, reportCategories } from "@/lib/helpers";
 import { useAuth } from "@/app/context/AuthContext";
 import type { Report, ReportCategory } from "@/lib/types";
 
@@ -21,7 +21,9 @@ export default function Home() {
     const q = query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(50));
 
     const unsub = onSnapshot(q, (snap) => {
-      const allReports = snap.docs.map((item) => ({ id: item.id, ...item.data() }) as Report).filter((item) => item.status !== "hidden");
+      const allReports = snap.docs
+        .map((item) => ({ id: item.id, ...item.data() }) as Report)
+        .filter((item) => item.status !== "hidden" && !isExpiredArchived(item.status, item.updatedAt, item.createdAt));
       setReports(category === "Alle" ? allReports : allReports.filter((item) => item.category === category));
       setLoading(false);
     }, () => setLoading(false));
@@ -39,7 +41,7 @@ export default function Home() {
       <section className="mx-auto max-w-md px-5 py-4">
         {userData?.banned ? (
           <div className="rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-center text-sm font-bold text-red-200">
-            Dein Account ist gesperrt. Du kannst aktuell keine Beiträge oder Kommentare erstellen.
+            Dein Account ist gesperrt. Du kannst aktuell keine Beiträge erstellen.
           </div>
         ) : (
           <Link href="/report" className="block w-full rounded-2xl bg-blue-600 py-4 text-center font-bold shadow-lg shadow-blue-600/30">

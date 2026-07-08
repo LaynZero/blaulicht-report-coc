@@ -10,6 +10,7 @@ export type AppUser = {
   location?: string;
   trustPoints?: number;
   notificationCategories?: ReportCategory[];
+  rulesAcceptedAt?: unknown;
   notificationOfficial?: boolean;
   notificationEmergency?: boolean;
   notificationMentions?: boolean;
@@ -27,8 +28,6 @@ export type ReportCategory =
   | "Unfall"
   | "Stau"
   | "Baustelle"
-  | "Feuerwehr"
-  | "Rettungsdienst"
   | "Sonstiges";
 
 export type ReportStatus = "new" | "confirmed" | "expired" | "hidden";
@@ -139,6 +138,7 @@ export type AppSettings = {
   maintenanceMode: boolean;
   allowAdminsDuringMaintenance: boolean;
   maintenanceMessage?: string;
+  groupRules?: string;
   updatedAt?: unknown;
   updatedBy?: string;
 };

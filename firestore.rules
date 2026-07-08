@@ -126,7 +126,8 @@ service cloud.firestore {
 
     match /appSettings/{settingId} {
       allow read: if true;
-      allow create, update: if isDeveloper();
+      allow create: if isDeveloper() || (isAdmin() && request.resource.data.keys().hasOnly(["groupRules", "updatedAt", "updatedBy"]));
+      allow update: if isDeveloper() || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["groupRules", "updatedAt", "updatedBy"]));
       allow delete: if isDeveloper();
     }
 
@@ -152,8 +153,8 @@ service cloud.firestore {
 
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if notBanned();
-        allow update, delete: if isAdmin() || (signedIn() && resource.data.authorId == request.auth.uid);
+        allow create: if isAdmin() && notBanned();
+        allow update, delete: if isAdmin();
       }
     }
   }

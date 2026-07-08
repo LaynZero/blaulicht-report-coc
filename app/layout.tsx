@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
 import ClientErrorLogger from "@/components/ClientErrorLogger";
 import MaintenanceGate from "@/components/MaintenanceGate";
+import RulesGate from "@/components/RulesGate";
 
 export const metadata: Metadata = {
   title: "Blaulicht Report COC",
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="de" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <AuthProvider><ClientErrorLogger /><MaintenanceGate>{children}</MaintenanceGate></AuthProvider>
+        <AuthProvider><ClientErrorLogger /><MaintenanceGate><RulesGate>{children}</RulesGate></MaintenanceGate></AuthProvider>
       </body>
     </html>
   );

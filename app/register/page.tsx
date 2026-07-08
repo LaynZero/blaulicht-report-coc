@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { isReservedUsername, normalizeUsername } from "@/lib/helpers";
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { DEFAULT_GROUP_RULES, isReservedUsername, normalizeUsername } from "@/lib/helpers";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,6 +15,16 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rulesAccepted, setRulesAccepted] = useState(false);
+  const [groupRules, setGroupRules] = useState(DEFAULT_GROUP_RULES);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "appSettings", "main"), (snap) => {
+      const rules = snap.data()?.groupRules;
+      setGroupRules(typeof rules === "string" && rules.trim() ? rules : DEFAULT_GROUP_RULES);
+    });
+    return () => unsub();
+  }, []);
 
   async function register(event: React.FormEvent) {
     event.preventDefault();
@@ -30,6 +40,8 @@ export default function RegisterPage() {
       return alert("Dieser Benutzername ist reserviert.");
     if (password.length < 6)
       return alert("Das Passwort muss mindestens 6 Zeichen haben.");
+    if (!rulesAccepted)
+      return alert("Bitte bestätige die Gruppenregeln, bevor du dich registrierst.");
 
     setLoading(true);
     try {
@@ -56,6 +68,7 @@ export default function RegisterPage() {
         confirmationsCount: 0,
         commentsCount: 0,
         banned: false,
+        rulesAcceptedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
       });
 
@@ -115,6 +128,21 @@ export default function RegisterPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
+
+        <div className="rounded-2xl border border-blue-400/20 bg-blue-500/10 p-4">
+          <div className="mb-3 max-h-56 overflow-y-auto whitespace-pre-line rounded-xl bg-slate-950/70 p-3 text-xs leading-relaxed text-slate-300">
+            {groupRules}
+          </div>
+          <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              checked={rulesAccepted}
+              onChange={(e) => setRulesAccepted(e.target.checked)}
+              className="mt-1 h-5 w-5 accent-blue-500"
+            />
+            <span>Ich habe die Gruppenregeln gelesen und akzeptiere sie.</span>
+          </label>
+        </div>
 
         <button
           disabled={loading}

@@ -46,7 +46,7 @@ export default function ReportCard({ report }: { report: Report }) {
 
   const canModerate = userData?.role === "admin" || userData?.role === "developer";
   const banned = userData?.banned === true;
-  const confirmed = user ? report.confirmations?.includes(user.uid) : false;
+  const markedOutdated = user ? report.confirmations?.includes(user.uid) : false;
   const flagged = user ? report.reports?.includes(user.uid) : false;
   const isVoice = Boolean(report.audioDataUrl);
   const isOfficial = Boolean(report.official);
@@ -68,24 +68,26 @@ export default function ReportCard({ report }: { report: Report }) {
       return false;
     }
     if (banned) {
-      alert("Dein Account ist gesperrt. Du kannst keine Beiträge, Kommentare oder Bestätigungen mehr erstellen.");
+      alert("Dein Account ist gesperrt. Du kannst keine Beiträge, Kommentare oder Statusmeldungen mehr erstellen.");
       return false;
     }
     return true;
   }
 
-  async function toggleConfirm() {
+  async function markOutdated() {
     if (!ensureCanWrite()) return;
     const confirmations = report.confirmations ?? [];
-    const next = confirmed ? confirmations.filter((id) => id !== user!.uid) : [...confirmations, user!.uid];
+    const next = markedOutdated ? confirmations.filter((id) => id !== user!.uid) : [...confirmations, user!.uid];
+    const nextStatus = canModerate || next.length >= 2 ? "expired" : "new";
     try {
       await updateDoc(doc(db, "reports", report.id), {
         confirmations: next,
-        status: next.length >= 3 ? "confirmed" : "new",
+        status: nextStatus,
+        updatedAt: serverTimestamp(),
       });
       await updateDoc(doc(db, "users", user!.uid), {
-        confirmationsCount: increment(confirmed ? -1 : 1),
-        trustPoints: increment(confirmed ? -2 : 2),
+        confirmationsCount: increment(markedOutdated ? -1 : 1),
+        trustPoints: increment(markedOutdated ? -1 : 1),
       });
     } catch {
       alert("Aktion nicht erlaubt. Falls dein Account gerade gesperrt wurde, lade die App bitte neu.");
@@ -104,6 +106,7 @@ export default function ReportCard({ report }: { report: Report }) {
 
   async function sendComment(event: React.FormEvent) {
     event.preventDefault();
+    if (!canModerate) return alert("Kommentare können nur von Admins und Entwicklern geschrieben werden.");
     if (!ensureCanWrite() || !userData) return;
     const text = commentText.trim();
     if (text.length < 2) return alert("Kommentar ist zu kurz.");
@@ -149,12 +152,20 @@ export default function ReportCard({ report }: { report: Report }) {
     if (confirm("Meldung wirklich löschen?")) await deleteDoc(doc(db, "reports", report.id));
   }
 
-  const statusText = report.status === "confirmed" ? "Bestätigt" : report.status === "expired" ? "Abgelaufen" : "Neu";
+  async function removeComment(comment: ReportComment) {
+    if (!canModerate) return;
+    if (!confirm("Kommentar wirklich löschen?")) return;
+    await deleteDoc(doc(db, "reports", report.id, "comments", comment.id));
+    await updateDoc(doc(db, "reports", report.id), { commentsCount: increment(-1), updatedAt: serverTimestamp() });
+    if (comment.authorId) await updateDoc(doc(db, "users", comment.authorId), { commentsCount: increment(-1) }).catch(() => undefined);
+  }
+
+  const statusText = report.status === "expired" ? "Nicht mehr aktuell" : "Aktiv";
   const officialText = report.authorRole === "developer" ? "Entwickler-Post" : "Admin-Post";
 
   return (
     <>
-    <article className={`glass-card overflow-hidden rounded-3xl p-5 ${isEmergency ? "border-red-400/70 shadow-lg shadow-red-600/10" : isOfficial ? "border-blue-400/40" : ""}`}>
+    <article className={`glass-card overflow-hidden rounded-3xl p-5 ${report.status === "expired" ? "opacity-70 grayscale-[0.25]" : ""} ${isEmergency ? "border-red-400/70 shadow-lg shadow-red-600/10" : isOfficial ? "border-blue-400/40" : ""}`}>
       {isEmergency && (
         <div className="mb-4 rounded-2xl border border-red-400/40 bg-red-600/20 p-3 text-sm font-black text-red-100">
           🚨 EILMELDUNG · Wichtige Warnung
@@ -236,9 +247,9 @@ export default function ReportCard({ report }: { report: Report }) {
       )}
 
       <div className="mt-4 rounded-2xl bg-slate-950/60 p-3 text-sm">
-        <div className={report.status === "confirmed" ? "flex items-center gap-2 text-green-400" : "flex items-center gap-2 text-yellow-300"}>
+        <div className={report.status === "expired" ? "flex items-center gap-2 text-slate-400" : "flex items-center gap-2 text-green-400"}>
           <ShieldCheck size={17} />
-          {isEmergency ? "Eilmeldung" : statusText} · {(report.confirmations ?? []).length} Bestätigungen
+          {isEmergency ? "Eilmeldung" : statusText} · {(report.confirmations ?? []).length}× als nicht mehr aktuell gemeldet
         </div>
       </div>
 
@@ -249,8 +260,8 @@ export default function ReportCard({ report }: { report: Report }) {
       )}
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-        <button onClick={toggleConfirm} disabled={banned} className={`rounded-xl py-3 font-bold disabled:opacity-40 ${confirmed ? "bg-green-600 text-white" : "bg-slate-800 text-slate-200"}`}>
-          ✅ {confirmed ? "Bestätigt" : "Bestätigen"}
+        <button onClick={markOutdated} disabled={banned || report.status === "expired"} className={`rounded-xl py-3 font-bold disabled:opacity-40 ${markedOutdated || report.status === "expired" ? "bg-slate-600 text-white" : "bg-slate-800 text-slate-200"}`}>
+          ⏱️ {report.status === "expired" ? "Nicht mehr aktuell" : markedOutdated ? "Gemeldet" : "Nicht mehr aktuell"}
         </button>
         <button onClick={() => setCommentsOpen((value) => !value)} className="flex items-center justify-center gap-1 rounded-xl bg-slate-800 py-3 text-slate-200">
           <MessageCircle size={16} /> {report.commentsCount ?? 0}
@@ -292,6 +303,15 @@ export default function ReportCard({ report }: { report: Report }) {
                   <span>{formatRelativeTime(comment.createdAt)}</span>
                 </div>
               </div>
+              {canModerate && (
+                <button
+                  type="button"
+                  onClick={() => removeComment(comment)}
+                  className="mb-2 rounded-xl bg-red-600/80 px-3 py-2 text-xs font-black text-white hover:bg-red-500"
+                >
+                  Kommentar löschen
+                </button>
+              )}
               {comment.mentions?.includes(userData?.username || "") && (
                 <div className="mb-2 rounded-xl border border-blue-300/20 bg-blue-500/10 px-3 py-2 text-xs font-bold text-blue-100">
                   Du wurdest hier erwähnt.
@@ -303,7 +323,13 @@ export default function ReportCard({ report }: { report: Report }) {
             </div>
           ))}
 
-          {!banned && user && (
+          {!canModerate && (
+            <p className="rounded-2xl border border-white/10 bg-slate-900/80 p-3 text-sm text-slate-400">
+              🔒 Kommentare können nur von Admins und Entwicklern geschrieben werden.
+            </p>
+          )}
+
+          {!banned && user && canModerate && (
             <form onSubmit={sendComment} className="flex gap-2">
               <div className="min-w-0 flex-1">
                 <MentionTextarea

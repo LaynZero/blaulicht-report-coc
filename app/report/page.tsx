@@ -155,7 +155,7 @@ export default function ReportPage() {
       } catch {
         throw new Error(`Serverfehler (Status ${response.status}). Die Meldung konnte nicht erstellt werden — bitte in ein paar Minuten erneut versuchen.`);
       }
-      if (!response.ok || !data.ok) throw new Error(data.message || "Meldung konnte nicht erstellt werden.");
+      if (!response.ok || !data.ok || !data.reportId) throw new Error(data.message || "Meldung konnte nicht erstellt werden.");
 
       await createMentionNotifications({
         mentions: data.mentions || [],

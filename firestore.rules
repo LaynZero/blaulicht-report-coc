@@ -152,7 +152,12 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow read: if true;
-      allow create: if notBanned();
+      // Reports are created exclusively via the server-side /api/reports/create
+      // route (Firebase Admin SDK, which bypasses these rules). This is what
+      // makes the per-user rate limit and the official/emergency role check
+      // actually enforceable — a client-side-only check could always be
+      // bypassed by writing to Firestore directly.
+      allow create: if false;
       allow update: if isAdmin() || (notBanned() && isVoteOnlyUpdate());
       allow delete: if isAdmin();
 

@@ -20,6 +20,8 @@ export type AppUser = {
   banned?: boolean;
   avatarDataUrl?: string;
   createdAt?: unknown;
+  /** Server-set on every report creation; used to enforce the per-user rate limit. */
+  lastReportAt?: unknown;
 };
 
 export type ReportCategory =
@@ -64,6 +66,8 @@ export type Report = {
   locationSource?: "manual" | "current_location";
   createdAt?: unknown;
   updatedAt?: unknown;
+  /** Set at creation to createdAt + 24h. A Firestore TTL policy on this field auto-deletes the doc. */
+  expiresAt?: unknown;
 };
 
 export type ReportComment = {

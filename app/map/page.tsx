@@ -5,7 +5,7 @@ import { collection, limit, onSnapshot, orderBy, query } from "firebase/firestor
 import { LocateFixed, Navigation } from "lucide-react";
 import BottomNavigation from "@/components/BottomNavigation";
 import { db } from "@/app/firebase";
-import { categoryEmoji, formatRelativeTime } from "@/lib/helpers";
+import { categoryEmoji, formatRelativeTime, isReportExpired } from "@/lib/helpers";
 import type { Report } from "@/lib/types";
 
 const COCHEM_CENTER = { latitude: 50.1469, longitude: 7.1667 };
@@ -35,7 +35,7 @@ export default function MapPage() {
 
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(80)), (snap) => {
-      setReports(snap.docs.map((item) => ({ id: item.id, ...item.data() }) as Report).filter((item) => item.status !== "hidden"));
+      setReports(snap.docs.map((item) => ({ id: item.id, ...item.data() }) as Report).filter((item) => item.status !== "hidden" && !isReportExpired(item.createdAt)));
     });
     return () => unsub();
   }, []);

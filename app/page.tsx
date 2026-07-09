@@ -7,7 +7,7 @@ import BottomNavigation from "@/components/BottomNavigation";
 import AppHeader from "@/components/AppHeader";
 import ReportCard from "@/components/feed/ReportCard";
 import { db } from "./firebase";
-import { isExpiredArchived, reportCategories } from "@/lib/helpers";
+import { isExpiredArchived, isReportExpired, reportCategories } from "@/lib/helpers";
 import { useAuth } from "@/app/context/AuthContext";
 import type { Report, ReportCategory } from "@/lib/types";
 
@@ -23,7 +23,7 @@ export default function Home() {
     const unsub = onSnapshot(q, (snap) => {
       const allReports = snap.docs
         .map((item) => ({ id: item.id, ...item.data() }) as Report)
-        .filter((item) => item.status !== "hidden" && !isExpiredArchived(item.status, item.updatedAt, item.createdAt));
+        .filter((item) => item.status !== "hidden" && !isExpiredArchived(item.status, item.updatedAt, item.createdAt) && !isReportExpired(item.createdAt));
       setReports(category === "Alle" ? allReports : allReports.filter((item) => item.category === category));
       setLoading(false);
     }, () => setLoading(false));

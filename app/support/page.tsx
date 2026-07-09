@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDoc,
   collection,
@@ -132,6 +132,21 @@ export default function SupportPage() {
   const [reply, setReply] = useState("");
   const [creating, setCreating] = useState(false);
   const [replying, setReplying] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const subjectRef = useRef<HTMLInputElement>(null);
+
+  function startQuickRequest(nextCategory: SupportCategory, subjectPrefix: string) {
+    setTarget("developer");
+    setCategory(nextCategory);
+    if (!subject.trim()) setSubject(subjectPrefix);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      const input = subjectRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }, 300);
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -302,6 +317,7 @@ export default function SupportPage() {
           )}
 
           <form
+            ref={formRef}
             onSubmit={createTicket}
             className={`glass-card rounded-[2rem] bg-gradient-to-br ${selectedTarget.gradient} p-5`}
           >
@@ -332,6 +348,7 @@ export default function SupportPage() {
                 )}
               </select>
               <input
+                ref={subjectRef}
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Betreff, z. B. Push funktioniert nicht"
@@ -509,22 +526,18 @@ export default function SupportPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => {
-                  setTarget("developer");
-                  setCategory("bug");
-                }}
-                className="rounded-3xl border border-white/10 bg-slate-900/70 p-4 text-left"
+                type="button"
+                onClick={() => startQuickRequest("bug", "Bug: ")}
+                className="rounded-3xl border border-white/10 bg-slate-900/70 p-4 text-left transition hover:border-red-400/40 hover:bg-red-500/10"
               >
                 <Bug className="mb-2 text-red-300" />
                 <p className="text-sm font-black">Bug melden</p>
                 <p className="mt-1 text-xs text-slate-400">an IT-Span</p>
               </button>
               <button
-                onClick={() => {
-                  setTarget("developer");
-                  setCategory("feature");
-                }}
-                className="rounded-3xl border border-white/10 bg-slate-900/70 p-4 text-left"
+                type="button"
+                onClick={() => startQuickRequest("feature", "Idee: ")}
+                className="rounded-3xl border border-white/10 bg-slate-900/70 p-4 text-left transition hover:border-yellow-400/40 hover:bg-yellow-500/10"
               >
                 <Lightbulb className="mb-2 text-yellow-300" />
                 <p className="text-sm font-black">Idee senden</p>

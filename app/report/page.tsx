@@ -2,17 +2,15 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { addDoc, collection, doc, increment, serverTimestamp, updateDoc } from "firebase/firestore";
 import { Camera, Loader2, Mic, Siren, Square, Trash2 } from "lucide-react";
 import BottomNavigation from "@/components/BottomNavigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import MentionTextarea from "@/components/MentionTextarea";
 import { useAuth } from "@/app/context/AuthContext";
-import { db } from "@/app/firebase";
-import { extractMentions, reportCategories } from "@/lib/helpers";
+import { reportCategories } from "@/lib/helpers";
 import { uploadReportAudio, uploadReportImage } from "@/lib/upload";
 import { createMentionNotifications } from "@/lib/notifications";
-import type { ReportCategory, ReportPostType } from "@/lib/types";
+import type { ReportCategory } from "@/lib/types";
 
 const MAX_SOURCE_IMAGE_BYTES = 15 * 1024 * 1024;
 
@@ -42,7 +40,6 @@ export default function ReportPage() {
   const chunksRef = useRef<BlobPart[]>([]);
 
   const canMakeOfficialPost = userData?.role === "admin" || userData?.role === "developer";
-  const canMakeEmergencyPost = canMakeOfficialPost;
   const banned = userData?.banned === true;
   const hasAudio = Boolean(audioUrl);
   const busy = loading || imageUploading || audioUploading;
@@ -135,61 +132,38 @@ export default function ReportPage() {
 
     setLoading(true);
     try {
-      const finalOfficial = Boolean(official && canMakeOfficialPost) || Boolean(emergency && canMakeEmergencyPost);
-      const finalEmergency = Boolean(emergency && canMakeEmergencyPost);
-      const postType: ReportPostType = finalEmergency && hasAudio ? "emergency_voice" : finalEmergency ? "emergency" : finalOfficial && hasAudio ? "official_voice" : finalOfficial ? "official" : hasAudio ? "voice" : "report";
-      const mentionUsernames = extractMentions(description);
-
-      const reportRef = await addDoc(collection(db, "reports"), {
-        category,
-        location: location.trim(),
-        description: description.trim(),
-        authorId: user.uid,
-        authorName: userData.displayName,
-        authorRole: userData.role,
-        authorUsername: userData.username,
-        authorAvatarDataUrl: userData.avatarDataUrl || "",
-        confirmations: [],
-        confirmedBy: [],
-        outdatedBy: [],
-        reports: [],
-        commentsCount: 0,
-        status: "new",
-        pinned: finalOfficial,
-        official: finalOfficial,
-        emergency: finalEmergency,
-        postType,
-        // Field name kept for backwards compatibility with existing display components;
-        // now holds a Firebase Storage download URL instead of a base64 data URL.
-        imageDataUrl: imageUrl || "",
-        mentions: mentionUsernames,
-        audioDataUrl: audioUrl || "",
-        audioMimeType: audioMimeType || "",
-        audioDurationSeconds: audioDurationSeconds || 0,
-        latitude: null,
-        longitude: null,
-        locationSource: "manual",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const idToken = await user.getIdToken();
+      const response = await fetch("/api/reports/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({
+          category,
+          location,
+          description,
+          imageUrl,
+          audioUrl,
+          audioMimeType,
+          audioDurationSeconds,
+          official,
+          emergency,
+        }),
       });
-      await updateDoc(doc(db, "users", user.uid), {
-        reportsCount: increment(1),
-        trustPoints: increment(finalEmergency ? 15 : finalOfficial ? 8 : 5),
-      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.message || "Meldung konnte nicht erstellt werden.");
 
       await createMentionNotifications({
-        mentions: mentionUsernames,
+        mentions: data.mentions || [],
         actorId: user.uid,
         actorName: userData.displayName,
         text: description.trim() || (hasAudio ? "Sprachnachricht" : "Neue Meldung"),
-        reportId: reportRef.id,
+        reportId: data.reportId,
         source: "report",
       });
 
       fetch("/api/push/report-created", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reportId: reportRef.id, authorId: user.uid }),
+        body: JSON.stringify({ reportId: data.reportId, authorId: user.uid }),
       }).catch(() => undefined);
 
       router.push("/");

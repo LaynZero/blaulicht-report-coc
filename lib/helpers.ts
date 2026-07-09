@@ -71,6 +71,11 @@ export function getTimestampMillis(value: unknown) {
   return 0;
 }
 
+export function isReportExpired(createdAt: unknown, ttlMs = 24 * 60 * 60 * 1000) {
+  const created = getTimestampMillis(createdAt);
+  return Boolean(created && Date.now() - created > ttlMs);
+}
+
 export function isExpiredArchived(status: string | undefined, updatedAt: unknown, createdAt: unknown, archiveAfterMs = 24 * 60 * 60 * 1000) {
   if (status !== "expired") return false;
   const base = getTimestampMillis(updatedAt) || getTimestampMillis(createdAt);

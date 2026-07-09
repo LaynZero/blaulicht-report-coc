@@ -30,8 +30,14 @@ export function ensureAdminApp(): boolean {
   if (getApps().length) return true;
   const serviceAccount = readServiceAccount();
   if (!serviceAccount) return false;
-  initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
-  return true;
+
+  try {
+    initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
+    return true;
+  } catch (error) {
+    console.error("Firebase Admin init failed:", error);
+    return false;
+  }
 }
 
 export function getOrigin(request: Request) {

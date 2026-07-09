@@ -5,6 +5,7 @@ import ClientErrorLogger from "@/components/ClientErrorLogger";
 import MaintenanceGate from "@/components/MaintenanceGate";
 import RulesGate from "@/components/RulesGate";
 import DeviceBanGate from "@/components/DeviceBanGate";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: "Blaulicht Report COC",
@@ -25,7 +26,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="de" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <AuthProvider><ClientErrorLogger /><DeviceBanGate><MaintenanceGate><RulesGate>{children}</RulesGate></MaintenanceGate></DeviceBanGate></AuthProvider>
+        <AuthProvider><ClientErrorLogger /><ServiceWorkerRegister /><DeviceBanGate><MaintenanceGate><RulesGate>{children}</RulesGate></MaintenanceGate></DeviceBanGate></AuthProvider>
       </body>
     </html>
   );

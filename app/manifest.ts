@@ -2,14 +2,17 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "Blaulicht Report COC",
     short_name: "Blaulicht COC",
     description: "Live-Meldungen für den Kreis Cochem-Zell",
     start_url: "/",
     scope: "/",
     display: "standalone",
+    orientation: "portrait-primary",
     background_color: "#020617",
     theme_color: "#1d4ed8",
+    categories: ["news", "utilities", "travel"],
     icons: [
       {
         src: "/icon-192.png",

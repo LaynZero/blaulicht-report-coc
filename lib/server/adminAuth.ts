@@ -75,6 +75,12 @@ export async function getVerifiedUser(request: Request, admin: AdminContext): Pr
     lastReportAt: data.lastReportAt ?? null,
   };
 }
+
+/**
+ * Verifies the Bearer token on the request and checks that the caller is a
+ * non-banned admin or developer. Returns null if any check fails.
+ */
+export async function getRequester(request: Request, admin: AdminContext): Promise<AdminRequester | null> {
   const authHeader = request.headers.get("authorization") || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!token) return null;

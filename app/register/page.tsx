@@ -7,6 +7,7 @@ import { auth, db } from "../firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { DEFAULT_GROUP_RULES, isReservedUsername, normalizeUsername } from "@/lib/helpers";
+import { getDeviceId } from "@/lib/deviceId";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -45,6 +46,22 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
+      const deviceId = getDeviceId();
+      try {
+        const statusResponse = await fetch("/api/auth/device-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deviceId }),
+        });
+        const statusData = await statusResponse.json();
+        if (statusData?.banned) {
+          alert("Dieses Gerät wurde von der Nutzung ausgeschlossen. Es können keine neuen Accounts erstellt werden.");
+          return;
+        }
+      } catch {
+        // Network hiccup on the check itself — don't block registration over a transient error.
+      }
+
       const usernameRef = doc(db, "usernames", cleanUsername);
       const usernameSnap = await getDoc(usernameRef);
       if (usernameSnap.exists()) {
@@ -68,6 +85,7 @@ export default function RegisterPage() {
         confirmationsCount: 0,
         commentsCount: 0,
         banned: false,
+        deviceIds: deviceId ? [deviceId] : [],
         rulesAcceptedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
       });

@@ -148,7 +148,13 @@ export default function ReportPage() {
           emergency,
         }),
       });
-      const data = await response.json();
+      const rawText = await response.text();
+      let data: { ok?: boolean; message?: string; reportId?: string; mentions?: string[] };
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(`Serverfehler (Status ${response.status}). Die Meldung konnte nicht erstellt werden — bitte in ein paar Minuten erneut versuchen.`);
+      }
       if (!response.ok || !data.ok) throw new Error(data.message || "Meldung konnte nicht erstellt werden.");
 
       await createMentionNotifications({

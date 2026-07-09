@@ -62,6 +62,14 @@ Meldungen werden nicht mehr direkt vom Client in Firestore geschrieben, sondern 
 
 Das Rate-Limit lässt sich in `app/api/reports/create/route.ts` über die Konstante `RATE_LIMIT_MS` anpassen.
 
+## Geräte-Sperre (gegen Ban-Umgehung)
+
+Admins können im Admin-Bereich neben "Nutzer sperren" auch "Gerät sperren" wählen. Das sperrt die bekannten Geräte-IDs des Nutzers (in `bannedDevices` in Firestore, nur per Admin SDK lesbar/schreibbar). Auf einem gesperrten Gerät können danach **keine neuen Accounts erstellt und keine bestehenden Accounts mehr benutzt werden** — auch eine laufende Session wird sofort beendet.
+
+**Wichtige Einschränkung:** Die Geräte-ID ist im Web keine echte Hardware-ID (die geben Browser aus Datenschutzgründen nicht raus), sondern eine selbst generierte ID in LocalStorage + Cookie gespiegelt. Ein technisch versierter Nutzer kann das durch "Website-Daten löschen" oder einen anderen Browser umgehen. Das Feature hebt die Hürde für die meisten Fälle von Ban-Umgehung deutlich, ist aber kein hundertprozentiger Schutz.
+
+Geräte werden erst ab dem ersten Login/Registrierung *nach* Einführung dieses Features erfasst — für ältere Accounts ohne bekannte Geräte-ID zeigt der Button entsprechend eine Meldung.
+
 ## Entwicklerrolle setzen
 
 Nach der Registrierung in Firestore unter `users/{deineUid}` das Feld setzen:

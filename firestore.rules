@@ -150,6 +150,10 @@ service cloud.firestore {
         .hasOnly(["confirmedBy", "outdatedBy", "status", "reports"]);
     }
 
+    match /bannedDevices/{deviceId} {
+      allow read, write: if false;
+    }
+
     match /reports/{reportId} {
       allow read: if true;
       // Reports are created exclusively via the server-side /api/reports/create

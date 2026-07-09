@@ -22,6 +22,10 @@ export type AppUser = {
   createdAt?: unknown;
   /** Server-set on every report creation; used to enforce the per-user rate limit. */
   lastReportAt?: unknown;
+  /** Device IDs seen for this account (see lib/deviceId.ts). Used for device-level bans. */
+  deviceIds?: string[];
+  /** True if any of this account's known devices are currently on the ban list. */
+  deviceBanned?: boolean;
 };
 
 export type ReportCategory =

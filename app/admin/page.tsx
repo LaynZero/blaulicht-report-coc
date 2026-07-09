@@ -436,7 +436,7 @@ export default function AdminPage() {
     };
   }
 
-  async function callAdminUserAction(payload: { action: "setRole" | "deleteUser"; uid: string; role?: UserRole }) {
+  async function callAdminUserAction(payload: { action: "setRole" | "deleteUser" | "banDevice" | "unbanDevice"; uid: string; role?: UserRole }) {
     const token = await auth.currentUser?.getIdToken(true);
     if (!token) throw new Error("Du bist nicht angemeldet.");
 
@@ -505,6 +505,23 @@ export default function AdminPage() {
     if (appUser.role === "developer")
       return alert("Entwickler können nicht gesperrt werden.");
     await updateDoc(doc(db, "users", appUser.uid), { banned: !appUser.banned });
+  }
+
+  async function toggleDeviceBan(appUser: AppUser, currentlyBanned: boolean) {
+    if (appUser.role === "developer") return alert("Entwickler-Geräte können nicht gesperrt werden.");
+    const deviceCount = appUser.deviceIds?.length ?? 0;
+    if (!currentlyBanned && deviceCount === 0) {
+      return alert("Für diesen Nutzer sind noch keine Geräte bekannt (erst ab dem nächsten Login erfasst).");
+    }
+    if (!currentlyBanned && !confirm(`${deviceCount} bekannte(s) Gerät(e) von @${appUser.username} sperren? Damit können auf diesem/diesen Gerät(en) keine Accounts mehr erstellt oder benutzt werden — auch neue.`)) {
+      return;
+    }
+
+    try {
+      await callAdminUserAction({ action: currentlyBanned ? "unbanDevice" : "banDevice", uid: appUser.uid });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Geräte-Sperre konnte nicht geändert werden.");
+    }
   }
 
   async function deleteUserAccount(appUser: AppUser) {
@@ -709,7 +726,7 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <button
                       disabled={selectedUser.role === "developer"}
                       onClick={() => toggleBan(selectedUser)}
@@ -720,6 +737,17 @@ export default function AdminPage() {
                         : selectedUser.banned
                           ? "Nutzer entsperren"
                           : "Nutzer sperren"}
+                    </button>
+                    <button
+                      disabled={selectedUser.role === "developer"}
+                      onClick={() => toggleDeviceBan(selectedUser, Boolean(selectedUser.deviceBanned))}
+                      className={`rounded-2xl py-4 text-sm font-black transition disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 ${selectedUser.deviceBanned ? "bg-slate-800 hover:bg-slate-700" : "bg-orange-600 hover:bg-orange-500"}`}
+                    >
+                      {selectedUser.role === "developer"
+                        ? "Entwickler geschützt"
+                        : selectedUser.deviceBanned
+                          ? "Gerät entsperren"
+                          : `Gerät sperren${selectedUser.deviceIds?.length ? ` (${selectedUser.deviceIds.length})` : ""}`}
                     </button>
                     <select
                       disabled={!canManageRoles || selectedUser.role === "developer"}

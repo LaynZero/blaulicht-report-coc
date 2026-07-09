@@ -1,11 +1,11 @@
 import type { ReportCategory } from "./types";
 
 export const reportCategories: { value: ReportCategory; label: string; icon: string }[] = [
+  { value: "Stau", label: "Stau", icon: "🚧" },
+  { value: "Unfall", label: "Unfall", icon: "🚨" },
+  { value: "Baustelle", label: "Baustelle", icon: "🏗️" },
   { value: "Verkehrskontrolle", label: "Verkehrskontrolle", icon: "🚓" },
   { value: "Blitzer", label: "Blitzer", icon: "📸" },
-  { value: "Unfall", label: "Unfall", icon: "🚨" },
-  { value: "Stau", label: "Stau", icon: "🚧" },
-  { value: "Baustelle", label: "Baustelle", icon: "🏗️" },
   { value: "Sonstiges", label: "Sonstiges", icon: "❓" },
 ];
 
@@ -77,28 +77,4 @@ export function isExpiredArchived(status: string | undefined, updatedAt: unknown
   return Boolean(base && Date.now() - base > archiveAfterMs);
 }
 
-export function resizeImageToDataUrl(file: File, maxSize = 1100, quality = 0.72) {
-  return new Promise<string>((resolve, reject) => {
-    if (!file.type.startsWith('image/')) return reject(new Error('Bitte wähle ein Bild aus.'));
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-        const width = Math.max(1, Math.round(img.width * scale));
-        const height = Math.max(1, Math.round(img.height * scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return reject(new Error('Bild konnte nicht verarbeitet werden.'));
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = () => reject(new Error('Bild konnte nicht geladen werden.'));
-      img.src = String(reader.result);
-    };
-    reader.onerror = () => reject(new Error('Bild konnte nicht gelesen werden.'));
-    reader.readAsDataURL(file);
-  });
-}
+

@@ -145,10 +145,15 @@ service cloud.firestore {
       }
     }
 
+    function isVoteOnlyUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(["confirmedBy", "outdatedBy", "status", "reports"]);
+    }
+
     match /reports/{reportId} {
       allow read: if true;
       allow create: if notBanned();
-      allow update: if notBanned() || isAdmin();
+      allow update: if isAdmin() || (notBanned() && isVoteOnlyUpdate());
       allow delete: if isAdmin();
 
       match /comments/{commentId} {

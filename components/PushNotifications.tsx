@@ -46,10 +46,11 @@ export default function PushNotifications() {
       const messaging = await getFirebaseMessaging();
       if (!messaging) return;
       unsubscribe = onMessage(messaging, (payload) => {
-        const title = payload.notification?.title || "Blaulicht Report COC";
-        const body = payload.notification?.body || "Neue Meldung in der App";
+        const data = payload.data || {};
+        const title = data.title || "Blaulicht Report COC";
+        const body = data.body || "Neue Meldung in der App";
         if (Notification.permission === "granted") {
-          const url = payload.data?.url || (payload.data?.reportId ? `/report/${payload.data.reportId}` : "/");
+          const url = data.url || (data.reportId ? `/report/${data.reportId}` : "/");
           const notification = new Notification(title, { body, icon: "/icon-192.png", data: { url } });
           notification.onclick = () => {
             window.focus();

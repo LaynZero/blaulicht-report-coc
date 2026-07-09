@@ -13,12 +13,14 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || "Blaulicht Report COC";
+  const data = payload.data || {};
+  const title = data.title || "Blaulicht Report COC";
   const options = {
-    body: payload.notification?.body || "Neue Meldung in der App",
+    body: data.body || "Neue Meldung in der App",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
-    data: { url: payload.data?.url || (payload.data?.reportId ? `/report/${payload.data.reportId}` : "/"), ...(payload.data || {}) },
+    tag: data.tag || undefined,
+    data: { url: data.url || (data.reportId ? `/report/${data.reportId}` : "/"), ...data },
   };
 
   self.registration.showNotification(title, options);

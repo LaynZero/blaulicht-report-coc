@@ -36,7 +36,10 @@ In Firebase aktivieren:
 
 1. Authentication → Email/Password aktivieren
 2. Firestore Database erstellen
-3. Optional: Regeln aus `firestore.rules` übernehmen
+3. Firestore-Regeln aus `firestore.rules` übernehmen
+4. Storage aktivieren (Standard-Bucket) und Regeln aus `storage.rules` übernehmen
+   – Fotos, Sprachnachrichten und Profilbilder werden dort gespeichert, nicht mehr als Base64 in Firestore.
+   – Mit Firebase CLI geht das auch automatisiert: `firebase deploy --only firestore:rules,storage`
 
 ## Entwicklerrolle setzen
 

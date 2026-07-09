@@ -11,47 +11,8 @@ import PushNotifications from "@/components/PushNotifications";
 import { useAuth } from "@/app/context/AuthContext";
 import { db } from "@/app/firebase";
 import { isReservedUsername, normalizeUsername } from "@/lib/helpers";
-import { Camera, HelpCircle, MessageCircle, Shield, Siren, Trash2 } from "lucide-react";
-
-function resizeImageToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    if (!file.type.startsWith("image/")) {
-      reject(new Error("Bitte wähle ein Bild aus."));
-      return;
-    }
-
-    if (file.size > 4 * 1024 * 1024) {
-      reject(new Error("Das Bild ist zu groß. Bitte wähle ein Bild unter 4 MB."));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Bild konnte nicht gelesen werden."));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("Bild konnte nicht verarbeitet werden."));
-      img.onload = () => {
-        const size = 320;
-        const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("Bild konnte nicht verarbeitet werden."));
-          return;
-        }
-
-        const sourceSize = Math.min(img.width, img.height);
-        const sx = (img.width - sourceSize) / 2;
-        const sy = (img.height - sourceSize) / 2;
-        ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
-        resolve(canvas.toDataURL("image/jpeg", 0.78));
-      };
-      img.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  });
-}
+import { uploadAvatarImage } from "@/lib/upload";
+import { Camera, HelpCircle, Loader2, MessageCircle, Shield, Siren, Trash2 } from "lucide-react";
 
 export default function ProfilePage() {
   const { user, userData, refreshUserData } = useAuth();
@@ -59,7 +20,8 @@ export default function ProfilePage() {
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
-  const [avatarDataUrl, setAvatarDataUrl] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
@@ -70,8 +32,21 @@ export default function ProfilePage() {
     setUsername(userData?.username ?? "");
     setBio(userData?.bio ?? "");
     setLocation(userData?.location ?? "");
-    setAvatarDataUrl(userData?.avatarDataUrl ?? "");
+    setAvatarUrl(userData?.avatarDataUrl ?? "");
   }, [userData]);
+
+  async function handleAvatarSelect(file: File) {
+    if (!user) return;
+    setAvatarUploading(true);
+    try {
+      const url = await uploadAvatarImage(file, user.uid);
+      setAvatarUrl(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bild konnte nicht hochgeladen werden.");
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
 
   async function saveProfile() {
     if (!user || !userData) return;
@@ -82,6 +57,7 @@ export default function ProfilePage() {
     if (cleanName.length < 2) return alert("Der Name muss mindestens 2 Zeichen lang sein.");
     if (cleanUsername.length < 3 || cleanUsername.length > 20) return alert("Benutzername: 3–20 Zeichen, nur Buchstaben, Zahlen, _ und .");
     if (isReservedUsername(cleanUsername)) return alert("Dieser Benutzername ist reserviert.");
+    if (avatarUploading) return alert("Bitte warte, bis der Bild-Upload abgeschlossen ist.");
 
     setSaving(true);
     try {
@@ -98,7 +74,9 @@ export default function ProfilePage() {
           username: cleanUsername,
           bio: bio.trim(),
           location: location.trim(),
-          avatarDataUrl,
+          // Field name kept for backwards compatibility; now holds a Firebase
+          // Storage download URL instead of a base64 data URL.
+          avatarDataUrl: avatarUrl,
         });
         await batch.commit();
       } else {
@@ -106,11 +84,10 @@ export default function ProfilePage() {
           displayName: cleanName,
           bio: bio.trim(),
           location: location.trim(),
-          avatarDataUrl,
+          avatarDataUrl: avatarUrl,
         });
       }
 
-      // Profilbilder speichern wir in Firestore. Firebase Auth photoURL darf keine langen Base64-Bilder enthalten.
       await updateProfile(user, { displayName: cleanName });
       await refreshUserData();
       alert("Profil gespeichert.");
@@ -145,7 +122,7 @@ export default function ProfilePage() {
         <section className="mx-auto max-w-md">
           <div className="glass-card rounded-3xl p-6 text-center">
             <div className="mx-auto mb-4 flex justify-center">
-              <UserAvatar src={avatarDataUrl || userData?.avatarDataUrl} name={userData?.displayName} size="xl" className="blue-glow" />
+              <UserAvatar src={avatarUrl || userData?.avatarDataUrl} name={userData?.displayName} size="xl" className="blue-glow" />
             </div>
             <h1 className="break-words text-3xl font-black">{userData?.displayName}</h1>
             <p className="mt-1 break-words text-slate-400">@{userData?.username}</p>
@@ -192,7 +169,14 @@ export default function ProfilePage() {
             <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
               <label className="mb-3 block text-sm font-bold text-slate-300">Profilbild</label>
               <div className="flex items-center gap-4">
-                <UserAvatar src={avatarDataUrl} name={displayName} size="lg" />
+                <div className="relative">
+                  <UserAvatar src={avatarUrl} name={displayName} size="lg" />
+                  {avatarUploading && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/60">
+                      <Loader2 size={18} className="animate-spin" />
+                    </div>
+                  )}
+                </div>
                 <div className="min-w-0 flex-1 space-y-2">
                   <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black hover:bg-blue-500">
                     <Camera size={16} /> Bild auswählen
@@ -200,25 +184,21 @@ export default function ProfilePage() {
                       type="file"
                       accept="image/*"
                       className="hidden"
+                      disabled={avatarUploading}
                       onChange={async (event) => {
                         const file = event.target.files?.[0];
+                        event.target.value = "";
                         if (!file) return;
-                        try {
-                          setAvatarDataUrl(await resizeImageToDataUrl(file));
-                        } catch (err) {
-                          alert(err instanceof Error ? err.message : "Bild konnte nicht geladen werden.");
-                        } finally {
-                          event.target.value = "";
-                        }
+                        await handleAvatarSelect(file);
                       }}
                     />
                   </label>
-                  {avatarDataUrl && (
-                    <button type="button" onClick={() => setAvatarDataUrl("")} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-200">
+                  {avatarUrl && (
+                    <button type="button" onClick={() => setAvatarUrl("")} disabled={avatarUploading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-200 disabled:opacity-50">
                       <Trash2 size={15} /> Entfernen
                     </button>
                   )}
-                  <p className="text-xs text-slate-500">Das Bild wird automatisch verkleinert, damit Firestore speichersparend bleibt.</p>
+                  <p className="text-xs text-slate-500">Das Bild wird automatisch zugeschnitten und in Firebase Storage hochgeladen.</p>
                 </div>
               </div>
             </div>
@@ -229,7 +209,7 @@ export default function ProfilePage() {
             </div>
             <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4 outline-none focus:border-blue-500" placeholder="Ort, z.B. Altstrimmig" maxLength={60} />
             <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4 outline-none focus:border-blue-500" rows={4} placeholder="Kurze Bio" maxLength={240} />
-            <button onClick={saveProfile} disabled={saving} className="w-full rounded-2xl bg-blue-600 py-3 font-black disabled:opacity-60">{saving ? "Speichert..." : "Profil speichern"}</button>
+            <button onClick={saveProfile} disabled={saving || avatarUploading} className="w-full rounded-2xl bg-blue-600 py-3 font-black disabled:opacity-60">{saving ? "Speichert..." : "Profil speichern"}</button>
           </div>
 
           <div className="mt-5"><PushNotifications /></div>

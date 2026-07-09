@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
-import { cert, getApps, initializeApp, type ServiceAccount } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { getMessaging } from "firebase-admin/messaging";
+import { chunk, getMessagingAdmin, getOrigin } from "@/lib/server/pushMessaging";
 
 export const runtime = "nodejs";
-
-type ServiceAccountJson = { project_id: string; client_email: string; private_key: string };
 
 type PushTokenDoc = {
   token?: string;
@@ -18,46 +14,9 @@ type PushTokenDoc = {
   mentions?: boolean;
 };
 
-function readServiceAccount(): ServiceAccountJson | null {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!raw) return null;
-  try {
-    const json = raw.trim().startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
-    const parsed = JSON.parse(json) as ServiceAccountJson;
-    if (!parsed.project_id || !parsed.client_email || !parsed.private_key) return null;
-    return { ...parsed, private_key: parsed.private_key.replace(/\\n/g, "\n") };
-  } catch {
-    return null;
-  }
-}
-
-function getAdmin() {
-  if (!getApps().length) {
-    const serviceAccount = readServiceAccount();
-    if (!serviceAccount) return null;
-    initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
-  }
-  return { firestore: getFirestore(), messaging: getMessaging() };
-}
-
-function getOrigin(request: Request) {
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
-  if (forwardedHost) return `${forwardedProto}://${forwardedHost}`;
-  return new URL(request.url).origin;
-}
-
-function chunk<T>(items: T[], size = 10) {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
-  return chunks;
-}
-
 export async function POST(request: Request) {
-  const admin = getAdmin();
-  if (!admin) {
-    return NextResponse.json({ ok: false, disabled: true, message: "FIREBASE_SERVICE_ACCOUNT_KEY fehlt." });
-  }
+  const admin = getMessagingAdmin();
+  if (!admin) return NextResponse.json({ ok: false, disabled: true, message: "FIREBASE_SERVICE_ACCOUNT_KEY fehlt." });
 
   try {
     const body = (await request.json()) as { reportId?: string; authorId?: string };
@@ -114,11 +73,13 @@ export async function POST(request: Request) {
     for (const tokenChunk of chunk(tokens, 500)) {
       const response = await admin.messaging.sendEachForMulticast({
         tokens: tokenChunk,
-        notification: { title, body: bodyText },
-        data: { reportId: body.reportId, url },
+        // Data-only payload: the service worker's onBackgroundMessage builds and
+        // shows the notification itself. Sending a top-level `notification` field
+        // here as well causes the browser to auto-display it AND the service
+        // worker to show it again, i.e. every push arrives twice.
+        data: { title, body: bodyText, reportId: body.reportId, url, tag: `report-${body.reportId}` },
         webpush: {
           fcmOptions: { link: absoluteUrl },
-          notification: { icon: "/icon-192.png", badge: "/icon-192.png", tag: `report-${body.reportId}` },
         },
       });
       successCount += response.successCount;

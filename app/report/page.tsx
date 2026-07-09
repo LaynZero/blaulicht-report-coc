@@ -3,39 +3,40 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addDoc, collection, doc, increment, serverTimestamp, updateDoc } from "firebase/firestore";
-import { Camera, Mic, Siren, Square, Trash2 } from "lucide-react";
+import { Camera, Loader2, Mic, Siren, Square, Trash2 } from "lucide-react";
 import BottomNavigation from "@/components/BottomNavigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import MentionTextarea from "@/components/MentionTextarea";
 import { useAuth } from "@/app/context/AuthContext";
 import { db } from "@/app/firebase";
-import { extractMentions, reportCategories, resizeImageToDataUrl } from "@/lib/helpers";
+import { extractMentions, reportCategories } from "@/lib/helpers";
+import { uploadReportAudio, uploadReportImage } from "@/lib/upload";
 import { createMentionNotifications } from "@/lib/notifications";
 import type { ReportCategory, ReportPostType } from "@/lib/types";
 
-function blobToDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(String(reader.result));
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
+const MAX_SOURCE_IMAGE_BYTES = 15 * 1024 * 1024;
 
 export default function ReportPage() {
   const router = useRouter();
   const { user, userData } = useAuth();
-  const [category, setCategory] = useState<ReportCategory>("Verkehrskontrolle");
+  const [category, setCategory] = useState<ReportCategory>("Stau");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [official, setOfficial] = useState(false);
   const [emergency, setEmergency] = useState(false);
-  const [imageDataUrl, setImageDataUrl] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [imageUrl, setImageUrl] = useState("");
+  const [imagePreview, setImagePreview] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
+
   const [isRecording, setIsRecording] = useState(false);
-  const [audioDataUrl, setAudioDataUrl] = useState("");
+  const [audioUrl, setAudioUrl] = useState("");
+  const [audioPreview, setAudioPreview] = useState("");
   const [audioMimeType, setAudioMimeType] = useState("");
   const [audioDurationSeconds, setAudioDurationSeconds] = useState(0);
+  const [audioUploading, setAudioUploading] = useState(false);
+
   const recordingStartedAtRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -43,7 +44,31 @@ export default function ReportPage() {
   const canMakeOfficialPost = userData?.role === "admin" || userData?.role === "developer";
   const canMakeEmergencyPost = canMakeOfficialPost;
   const banned = userData?.banned === true;
-  const hasAudio = Boolean(audioDataUrl);
+  const hasAudio = Boolean(audioUrl);
+  const busy = loading || imageUploading || audioUploading;
+
+  async function handleImageSelect(file: File) {
+    if (file.size > MAX_SOURCE_IMAGE_BYTES) return alert("Das Bild ist zu groß. Bitte wähle ein Bild unter 15 MB.");
+    if (!user) return;
+
+    const localPreview = URL.createObjectURL(file);
+    setImagePreview(localPreview);
+    setImageUploading(true);
+    try {
+      const url = await uploadReportImage(file, user.uid);
+      setImageUrl(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bild konnte nicht hochgeladen werden.");
+      setImagePreview("");
+    } finally {
+      setImageUploading(false);
+    }
+  }
+
+  function removeImage() {
+    setImageUrl("");
+    setImagePreview("");
+  }
 
   async function startRecording() {
     if (!navigator.mediaDevices?.getUserMedia) return alert("Dein Browser unterstützt Sprachnachrichten leider nicht.");
@@ -61,12 +86,25 @@ export default function ReportPage() {
 
       recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        const dataUrl = await blobToDataUrl(blob);
-        setAudioDataUrl(dataUrl);
-        setAudioMimeType(blob.type);
-        setAudioDurationSeconds(recordingStartedAtRef.current ? Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000)) : 0);
+        const durationSeconds = recordingStartedAtRef.current ? Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000)) : 0;
         recordingStartedAtRef.current = null;
         stream.getTracks().forEach((track) => track.stop());
+
+        setAudioMimeType(blob.type);
+        setAudioDurationSeconds(durationSeconds);
+        setAudioPreview(URL.createObjectURL(blob));
+
+        if (!user) return;
+        setAudioUploading(true);
+        try {
+          const url = await uploadReportAudio(blob, user.uid, blob.type);
+          setAudioUrl(url);
+        } catch (err) {
+          alert(err instanceof Error ? err.message : "Sprachnachricht konnte nicht hochgeladen werden.");
+          setAudioPreview("");
+        } finally {
+          setAudioUploading(false);
+        }
       };
 
       recorder.start();
@@ -81,13 +119,19 @@ export default function ReportPage() {
     setIsRecording(false);
   }
 
+  function removeAudio() {
+    setAudioUrl("");
+    setAudioPreview("");
+    setAudioMimeType("");
+    setAudioDurationSeconds(0);
+  }
+
   async function createReport(event: React.FormEvent) {
     event.preventDefault();
     if (!user || !userData) return;
     if (banned) return alert("Dein Account ist gesperrt. Du kannst keine Beiträge mehr erstellen.");
+    if (imageUploading || audioUploading) return alert("Bitte warte, bis der Upload abgeschlossen ist.");
     if (!hasAudio && description.trim().length < 1) return alert("Bitte schreibe mindestens 1 Zeichen oder nimm eine Sprachnachricht auf.");
-    if (audioDataUrl.length > 850000) return alert("Die Sprachnachricht ist zu lang. Bitte nimm sie kürzer auf, damit sie in Firestore gespeichert werden kann.");
-    if (imageDataUrl.length > 850000) return alert("Das Bild ist noch zu groß. Bitte wähle ein kleineres Bild.");
 
     setLoading(true);
     try {
@@ -115,9 +159,11 @@ export default function ReportPage() {
         official: finalOfficial,
         emergency: finalEmergency,
         postType,
-        imageDataUrl: imageDataUrl || "",
+        // Field name kept for backwards compatibility with existing display components;
+        // now holds a Firebase Storage download URL instead of a base64 data URL.
+        imageDataUrl: imageUrl || "",
         mentions: mentionUsernames,
-        audioDataUrl: audioDataUrl || "",
+        audioDataUrl: audioUrl || "",
         audioMimeType: audioMimeType || "",
         audioDurationSeconds: audioDurationSeconds || 0,
         latitude: null,
@@ -205,44 +251,51 @@ export default function ReportPage() {
 
           <div className="rounded-3xl border border-cyan-400/20 bg-cyan-500/10 p-4">
             <p className="mb-3 font-black">📷 Foto hinzufügen</p>
-            {imageDataUrl ? (
+            {imagePreview ? (
               <div className="space-y-3">
-                <img src={imageDataUrl} alt="Vorschau" className="max-h-72 w-full rounded-2xl object-cover" />
-                <button type="button" onClick={() => setImageDataUrl("")} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-2 text-sm font-bold"><Trash2 size={15} /> Bild löschen</button>
+                <div className="relative">
+                  <img src={imagePreview} alt="Vorschau" className="max-h-72 w-full rounded-2xl object-cover" />
+                  {imageUploading && (
+                    <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-2xl bg-slate-950/60 text-sm font-bold">
+                      <Loader2 size={18} className="animate-spin" /> Wird hochgeladen...
+                    </div>
+                  )}
+                </div>
+                <button type="button" onClick={removeImage} disabled={imageUploading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-2 text-sm font-bold disabled:opacity-50"><Trash2 size={15} /> Bild löschen</button>
               </div>
             ) : (
               <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-cyan-600 py-3 font-black hover:bg-cyan-500">
                 <Camera size={18} /> Bild auswählen
                 <input type="file" accept="image/*" className="hidden" disabled={banned} onChange={async (event) => {
                   const file = event.target.files?.[0];
+                  event.target.value = "";
                   if (!file) return;
-                  try { setImageDataUrl(await resizeImageToDataUrl(file)); }
-                  catch (err) { alert(err instanceof Error ? err.message : "Bild konnte nicht verarbeitet werden."); }
-                  finally { event.target.value = ""; }
+                  await handleImageSelect(file);
                 }} />
               </label>
             )}
-            <p className="mt-3 text-xs text-slate-400">Fotos werden automatisch verkleinert, damit die App speichersparend bleibt.</p>
+            <p className="mt-3 text-xs text-slate-400">Fotos werden automatisch verkleinert und in Firebase Storage hochgeladen.</p>
           </div>
 
           <div className="rounded-3xl border border-violet-400/20 bg-violet-500/10 p-4">
             <p className="mb-3 font-black">🎙️ Sprachnachricht statt Text</p>
-            <p className="mb-4 text-sm text-slate-400">Für den Anfang wird Audio direkt in Firestore gespeichert. Nimm es deshalb kurz auf, am besten unter 30–45 Sekunden.</p>
+            <p className="mb-4 text-sm text-slate-400">Am besten unter 30–45 Sekunden aufnehmen.</p>
             {!isRecording ? (
               <button type="button" onClick={startRecording} disabled={banned} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3 font-black disabled:opacity-50"><Mic size={18} /> Aufnahme starten</button>
             ) : (
               <button type="button" onClick={stopRecording} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 py-3 font-black"><Square size={18} /> Aufnahme stoppen</button>
             )}
-            {audioDataUrl && (
+            {audioPreview && (
               <div className="mt-4 rounded-2xl bg-slate-950/60 p-3">
-                <audio src={audioDataUrl} controls className="w-full" />
-                <button type="button" onClick={() => { setAudioDataUrl(""); setAudioMimeType(""); setAudioDurationSeconds(0); }} className="mt-3 w-full rounded-xl bg-slate-800 py-2 text-sm font-bold">Aufnahme löschen</button>
+                <audio src={audioPreview} controls className="w-full" />
+                {audioUploading && <p className="mt-2 flex items-center gap-2 text-sm font-bold text-violet-200"><Loader2 size={15} className="animate-spin" /> Wird hochgeladen...</p>}
+                <button type="button" onClick={removeAudio} disabled={audioUploading} className="mt-3 w-full rounded-xl bg-slate-800 py-2 text-sm font-bold disabled:opacity-50">Aufnahme löschen</button>
               </div>
             )}
           </div>
 
-          <button disabled={loading || banned} className={`w-full rounded-2xl py-4 text-lg font-black shadow-lg disabled:opacity-60 ${emergency ? "bg-red-600 shadow-red-600/30" : "bg-blue-600 shadow-blue-600/30"}`}>
-            {loading ? "Wird veröffentlicht..." : emergency ? "🚨 Eilmeldung veröffentlichen" : official ? "Offiziellen Post veröffentlichen" : "Meldung veröffentlichen"}
+          <button disabled={busy || banned} className={`w-full rounded-2xl py-4 text-lg font-black shadow-lg disabled:opacity-60 ${emergency ? "bg-red-600 shadow-red-600/30" : "bg-blue-600 shadow-blue-600/30"}`}>
+            {loading ? "Wird veröffentlicht..." : imageUploading || audioUploading ? "Upload läuft..." : emergency ? "🚨 Eilmeldung veröffentlichen" : official ? "Offiziellen Post veröffentlichen" : "Meldung veröffentlichen"}
           </button>
         </form>
         <BottomNavigation />

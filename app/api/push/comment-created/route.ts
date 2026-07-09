@@ -1,51 +1,12 @@
 import { NextResponse } from "next/server";
-import { cert, getApps, initializeApp, type ServiceAccount } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { getMessaging } from "firebase-admin/messaging";
+import { chunk, getMessagingAdmin, getOrigin } from "@/lib/server/pushMessaging";
 
 export const runtime = "nodejs";
 
-type ServiceAccountJson = { project_id: string; client_email: string; private_key: string };
-
 type PushTokenDoc = { token?: string; uid?: string; active?: boolean; mentions?: boolean };
 
-function readServiceAccount(): ServiceAccountJson | null {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!raw) return null;
-  try {
-    const json = raw.trim().startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
-    const parsed = JSON.parse(json) as ServiceAccountJson;
-    if (!parsed.project_id || !parsed.client_email || !parsed.private_key) return null;
-    return { ...parsed, private_key: parsed.private_key.replace(/\\n/g, "\n") };
-  } catch {
-    return null;
-  }
-}
-
-function getAdmin() {
-  if (!getApps().length) {
-    const serviceAccount = readServiceAccount();
-    if (!serviceAccount) return null;
-    initializeApp({ credential: cert(serviceAccount as ServiceAccount) });
-  }
-  return { firestore: getFirestore(), messaging: getMessaging() };
-}
-
-function getOrigin(request: Request) {
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
-  if (forwardedHost) return `${forwardedProto}://${forwardedHost}`;
-  return new URL(request.url).origin;
-}
-
-function chunk<T>(items: T[], size = 10) {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
-  return chunks;
-}
-
 export async function POST(request: Request) {
-  const admin = getAdmin();
+  const admin = getMessagingAdmin();
   if (!admin) return NextResponse.json({ ok: false, disabled: true, message: "FIREBASE_SERVICE_ACCOUNT_KEY fehlt." });
 
   try {
@@ -89,9 +50,16 @@ export async function POST(request: Request) {
     const absoluteUrl = `${getOrigin(request)}${url}`;
     const response = await admin.messaging.sendEachForMulticast({
       tokens,
-      notification: { title: "Du wurdest erwähnt", body: `${comment.authorName || "Jemand"}: ${String(comment.text || "").slice(0, 120)}` },
-      data: { reportId: body.reportId, commentId: body.commentId, url },
-      webpush: { fcmOptions: { link: absoluteUrl }, notification: { icon: "/icon-192.png", badge: "/icon-192.png", tag: `mention-${body.commentId}` } },
+      // Data-only payload, see report-created/route.ts for why (avoids double notifications).
+      data: {
+        title: "Du wurdest erwähnt",
+        body: `${comment.authorName || "Jemand"}: ${String(comment.text || "").slice(0, 120)}`,
+        reportId: body.reportId,
+        commentId: body.commentId,
+        url,
+        tag: `mention-${body.commentId}`,
+      },
+      webpush: { fcmOptions: { link: absoluteUrl } },
     });
 
     return NextResponse.json({ ok: true, sent: response.successCount, failed: response.failureCount });

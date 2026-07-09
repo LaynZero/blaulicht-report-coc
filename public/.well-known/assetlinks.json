@@ -3,8 +3,8 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "TODO_PACKAGE_NAME_HIER_EINTRAGEN",
-      "sha256_cert_fingerprints": ["TODO_SHA256_FINGERPRINT_HIER_EINTRAGEN"]
+      "package_name": "de.itspan.blaulichtreportcoc",
+      "sha256_cert_fingerprints": ["24:E8:1A:AB:0A:46:22:9C:91:3C:03:52:55:24:2F:1A:C1:60:81:45:05:0F:26:1B:A9:01:CC:84:F3:D6:A5:A4"]
     }
   }
 ]

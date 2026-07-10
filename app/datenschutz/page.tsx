@@ -19,7 +19,7 @@ export default function DatenschutzPage() {
             Leon Span (Inhaber, IT-Span)<br />
             Gartenstraße 7<br />
             56858 Altstrimmig<br />
-            E-Mail: leo.span@it-span.de
+            E-Mail: leon.span@it-span.de
           </p>
         </div>
 

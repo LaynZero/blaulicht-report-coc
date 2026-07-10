@@ -8,6 +8,7 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  getCountFromServer,
   getDocs,
   endAt,
   limit,
@@ -229,30 +230,99 @@ export default function AdminPage() {
   const [showAllUserActivity, setShowAllUserActivity] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [totalUserCount, setTotalUserCount] = useState<number | null>(null);
+  const [staffUsers, setStaffUsers] = useState<AppUser[]>([]);
+  const [backfillRunning, setBackfillRunning] = useState(false);
+
+  useEffect(() => {
+    getCountFromServer(collection(db, "users"))
+      .then((snap) => setTotalUserCount(snap.data().count))
+      .catch(() => setTotalUserCount(null));
+  }, []);
+
+  useEffect(() => {
+    if (userData?.role !== "developer") return;
+    const unsub = onSnapshot(query(collection(db, "users"), where("role", "in", ["admin", "developer"])), (snap) => {
+      setStaffUsers(snap.docs.map((item) => item.data() as AppUser));
+    });
+    return () => unsub();
+  }, [userData?.role]);
+
+  async function backfillDisplayNameSearch() {
+    if (userData?.role !== "developer") return;
+    setBackfillRunning(true);
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      const missing = snap.docs.filter((item) => !item.data().displayNameLower && item.data().displayName);
+      for (let i = 0; i < missing.length; i += 400) {
+        const chunk = missing.slice(i, i + 400);
+        const batch = writeBatch(db);
+        chunk.forEach((item) => batch.update(item.ref, { displayNameLower: String(item.data().displayName).toLowerCase() }));
+        await batch.commit();
+      }
+      alert(`Fertig — ${missing.length} Nutzer für die Namenssuche nachgerüstet.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Nachrüsten fehlgeschlagen.");
+    } finally {
+      setBackfillRunning(false);
+    }
+  }
 
   const cleanSearch = userSearch.trim().toLowerCase().replace(/^@/, "");
 
   useEffect(() => {
-    const usersQuery = cleanSearch
-      ? query(
-          collection(db, "users"),
-          orderBy("username"),
-          startAt(cleanSearch),
-          endAt(`${cleanSearch}\uf8ff`),
-          limit(25),
-        )
-      : query(collection(db, "users"), orderBy("createdAt", "desc"), limit(25));
+    if (!cleanSearch) {
+      const unsubUsers = onSnapshot(query(collection(db, "users"), orderBy("createdAt", "desc"), limit(25)), (snap) => {
+        const nextUsers = snap.docs.map((item) => item.data() as AppUser);
+        setUsers(nextUsers);
+        setSelectedUid((current) => {
+          if (current && nextUsers.some((item) => item.uid === current)) return current;
+          return nextUsers[0]?.uid || "";
+        });
+      });
+      return () => unsubUsers();
+    }
 
-    const unsubUsers = onSnapshot(usersQuery, (snap) => {
-      const nextUsers = snap.docs.map((item) => item.data() as AppUser);
+    let usernameResults: AppUser[] = [];
+    let nameResults: AppUser[] = [];
+
+    const applyMerged = () => {
+      const merged = new Map<string, AppUser>();
+      [...usernameResults, ...nameResults].forEach((item) => merged.set(item.uid, item));
+      const nextUsers = [...merged.values()];
       setUsers(nextUsers);
       setSelectedUid((current) => {
         if (current && nextUsers.some((item) => item.uid === current)) return current;
         return nextUsers[0]?.uid || "";
       });
-    });
+    };
 
-    return () => unsubUsers();
+    const unsubUsername = onSnapshot(
+      query(collection(db, "users"), orderBy("username"), startAt(cleanSearch), endAt(`${cleanSearch}\uf8ff`), limit(25)),
+      (snap) => {
+        usernameResults = snap.docs.map((item) => item.data() as AppUser);
+        applyMerged();
+      },
+    );
+
+    const unsubName = onSnapshot(
+      query(collection(db, "users"), orderBy("displayNameLower"), startAt(cleanSearch), endAt(`${cleanSearch}\uf8ff`), limit(25)),
+      (snap) => {
+        nameResults = snap.docs.map((item) => item.data() as AppUser);
+        applyMerged();
+      },
+      () => {
+        // displayNameLower may be missing on very old accounts that never re-saved their profile —
+        // fails open by just leaving name-search results empty rather than breaking the whole search.
+        nameResults = [];
+        applyMerged();
+      },
+    );
+
+    return () => {
+      unsubUsername();
+      unsubName();
+    };
   }, [cleanSearch]);
 
   useEffect(() => {
@@ -655,8 +725,8 @@ export default function AdminPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="glass-card rounded-3xl p-4">
               <Users className="mb-3 text-blue-400" />
-              <p className="text-2xl font-black">{users.length}</p>
-              <p className="text-sm text-slate-400">geladene Nutzer</p>
+              <p className="text-2xl font-black">{totalUserCount ?? "…"}</p>
+              <p className="text-sm text-slate-400">registrierte Nutzer</p>
             </div>
             <div className="glass-card rounded-3xl p-4">
               <Shield className="mb-3 text-green-400" />
@@ -703,7 +773,7 @@ export default function AdminPage() {
                     setSelectedReports([]);
                     setSelectedComments([]);
                   }}
-                  placeholder="@benutzername suchen..."
+                  placeholder="@benutzername oder Anzeigename suchen..."
                   className="w-full rounded-2xl border border-white/10 bg-slate-950 py-4 pl-11 pr-4 text-sm outline-none transition focus:border-blue-500"
                 />
               </label>
@@ -1001,6 +1071,51 @@ export default function AdminPage() {
                   className="mt-3 flex items-center gap-2 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-black text-slate-950 disabled:opacity-60"
                 >
                   <Save size={16} /> {savingSettings ? "Speichere..." : "Wartungstext speichern"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {userData?.role === "developer" && (
+            <div className="mt-6 glass-card rounded-3xl p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <Shield className="text-blue-300" />
+                <div>
+                  <h2 className="text-xl font-black">🛡️ Wer hat Admin-Rechte?</h2>
+                  <p className="text-sm text-slate-400">Alle Accounts mit Rolle Admin oder Entwickler, live aktualisiert.</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {staffUsers.length === 0 && <p className="text-sm text-slate-500">Keine Admins/Entwickler gefunden.</p>}
+                {staffUsers
+                  .slice()
+                  .sort((a, b) => (a.role === b.role ? a.displayName.localeCompare(b.displayName) : a.role === "developer" ? -1 : 1))
+                  .map((staffUser) => (
+                    <div key={staffUser.uid} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-950/70 p-3">
+                      <div className="flex items-center gap-3">
+                        <UserAvatar src={staffUser.avatarDataUrl} name={staffUser.displayName} size="sm" />
+                        <div>
+                          <p className="font-bold">{staffUser.displayName}</p>
+                          <p className="text-xs text-slate-500">@{staffUser.username}</p>
+                        </div>
+                      </div>
+                      <RoleBadge role={staffUser.role} />
+                    </div>
+                  ))}
+              </div>
+
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <p className="text-xs text-slate-500">
+                  Namenssuche funktioniert nur für Accounts, die sich seit Einführung dieser Funktion mindestens einmal neu eingeloggt oder ihr Profil gespeichert haben. Für ältere Bestandsaccounts einmalig nachrüsten:
+                </p>
+                <button
+                  type="button"
+                  disabled={backfillRunning}
+                  onClick={backfillDisplayNameSearch}
+                  className="mt-3 rounded-2xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-200 disabled:opacity-60"
+                >
+                  {backfillRunning ? "Läuft..." : "Namenssuche für Bestandsnutzer nachrüsten"}
                 </button>
               </div>
             </div>

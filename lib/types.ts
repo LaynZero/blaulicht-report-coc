@@ -4,6 +4,8 @@ export type AppUser = {
   uid: string;
   email: string;
   displayName: string;
+  /** Lowercased mirror of displayName, used for case-insensitive admin search. */
+  displayNameLower?: string;
   username: string;
   role: UserRole;
   bio?: string;

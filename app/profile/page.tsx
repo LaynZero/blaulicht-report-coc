@@ -129,6 +129,7 @@ export default function ProfilePage() {
         if (oldUsername) batch.delete(doc(db, "usernames", oldUsername));
         batch.update(doc(db, "users", user.uid), {
           displayName: cleanName,
+          displayNameLower: cleanName.toLowerCase(),
           username: cleanUsername,
           bio: bio.trim(),
           location: location.trim(),
@@ -140,6 +141,7 @@ export default function ProfilePage() {
       } else {
         await updateDoc(doc(db, "users", user.uid), {
           displayName: cleanName,
+          displayNameLower: cleanName.toLowerCase(),
           bio: bio.trim(),
           location: location.trim(),
           avatarDataUrl: avatarUrl,

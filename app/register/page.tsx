@@ -75,6 +75,7 @@ export default function RegisterPage() {
       await setDoc(doc(db, "users", cred.user.uid), {
         uid: cred.user.uid,
         displayName: displayName.trim(),
+        displayNameLower: displayName.trim().toLowerCase(),
         username: cleanUsername,
         email,
         role: "user",

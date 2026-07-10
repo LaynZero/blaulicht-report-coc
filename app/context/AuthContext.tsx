@@ -40,6 +40,7 @@ async function ensureUserDocument(firebaseUser: User, deviceId: string) {
     uid: firebaseUser.uid,
     email: firebaseUser.email ?? "",
     displayName: firebaseUser.displayName ?? "Neues Mitglied",
+    displayNameLower: (firebaseUser.displayName ?? "Neues Mitglied").toLowerCase(),
     username: `user_${firebaseUser.uid.slice(0, 6)}`,
     role: "user",
     trustPoints: 0,

@@ -112,7 +112,8 @@ export default function HandbuchPage() {
           <div className="mt-4 space-y-1 rounded-2xl bg-slate-950/40 p-4 text-sm">
             <p className="font-bold">Leon Span – IT-Span</p>
             <p>Telefon: +49 152 52097230</p>
-            <p>E-Mail: support@it-span.de</p>
+            <p>E-Mail: blaulichtreport@it-span.de</p>
+            <p>Leon Span (persönlich): leon.span@it-span.de</p>
             <p>
               WhatsApp:{" "}
               <a href="https://wa.me/4915252097230" className="text-blue-300 underline">

@@ -286,6 +286,17 @@ export default function SupportPage() {
             </p>
           </div>
 
+          <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-4 text-xs leading-relaxed text-slate-400">
+            <p className="font-bold text-slate-300">Lieber per E-Mail?</p>
+            <p className="mt-1">
+              Ihr erreicht uns auch direkt unter{" "}
+              <a href="mailto:blaulichtreport@it-span.de" className="text-blue-300 underline">blaulichtreport@it-span.de</a>
+              , oder bei Leon Span persönlich unter{" "}
+              <a href="mailto:leon.span@it-span.de" className="text-blue-300 underline">leon.span@it-span.de</a>
+              . Am schnellsten geht's aber meistens über die Support-Funktion hier in der App.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             {(["admin", "developer"] as SupportTarget[]).map((item) => {
               const info = targetInfo(item);

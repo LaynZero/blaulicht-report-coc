@@ -81,6 +81,10 @@ export default function InfoPage() {
           </p>
         </div>
 
+        <a href="/entwickler" className="block rounded-3xl border border-blue-400/30 bg-blue-600/10 p-5 text-center text-sm font-black text-blue-200 hover:bg-blue-600/20">
+          💙 Über den Entwickler (IT-Span)
+        </a>
+
         <a href="/handbuch" className="block rounded-3xl border border-blue-400/30 bg-blue-600/10 p-5 text-center text-sm font-black text-blue-200 hover:bg-blue-600/20">
           📖 Nutzerhandbuch öffnen
         </a>

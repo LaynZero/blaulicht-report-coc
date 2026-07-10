@@ -81,8 +81,26 @@ export default function ProfilePage() {
     try {
       const url = await uploadAvatarImage(file, user.uid);
       setAvatarUrl(url);
+      // Save immediately so the new picture is live without needing "Profil speichern".
+      await updateDoc(doc(db, "users", user.uid), { avatarDataUrl: url });
+      await updateProfile(user, { photoURL: url }).catch(() => undefined);
+      await refreshUserData();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Bild konnte nicht hochgeladen werden.");
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
+  async function removeAvatar() {
+    if (!user) return;
+    setAvatarUploading(true);
+    try {
+      setAvatarUrl("");
+      await updateDoc(doc(db, "users", user.uid), { avatarDataUrl: "" });
+      await refreshUserData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bild konnte nicht entfernt werden.");
     } finally {
       setAvatarUploading(false);
     }
@@ -234,7 +252,7 @@ export default function ProfilePage() {
                     />
                   </label>
                   {avatarUrl && (
-                    <button type="button" onClick={() => setAvatarUrl("")} disabled={avatarUploading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-200 disabled:opacity-50">
+                    <button type="button" onClick={removeAvatar} disabled={avatarUploading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-200 disabled:opacity-50">
                       <Trash2 size={15} /> Entfernen
                     </button>
                   )}

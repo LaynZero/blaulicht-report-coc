@@ -123,6 +123,10 @@ export default function HandbuchPage() {
           </div>
         </div>
 
+        <a href="/entwickler" className="block rounded-3xl border border-white/10 bg-slate-900/70 p-5 text-center text-sm font-bold text-slate-300 hover:bg-slate-900">
+          💙 Über den Entwickler
+        </a>
+
         <div className="grid grid-cols-2 gap-3">
           <a href="/datenschutz" className="block rounded-3xl border border-white/10 bg-slate-900/70 p-5 text-center text-sm font-bold text-slate-300 hover:bg-slate-900">
             Datenschutz

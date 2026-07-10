@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { chunk, getMessagingAdmin, getOrigin } from "@/lib/server/pushMessaging";
 
 export const runtime = "nodejs";
@@ -44,9 +45,22 @@ export async function POST(request: Request) {
       });
     }
 
-    const tokensSnap = await admin.firestore.collection("pushTokens").where("active", "==", true).limit(1000).get();
+    const allTokenDocs: QueryDocumentSnapshot[] = [];
+    let cursor: QueryDocumentSnapshot | null = null;
+    const PAGE_SIZE = 1000;
+    const MAX_TOKENS = 20_000; // safety ceiling, far above realistic scale — guards against a runaway loop, not a real limit
 
-    const tokens = tokensSnap.docs
+    while (allTokenDocs.length < MAX_TOKENS) {
+      let pageQuery = admin.firestore.collection("pushTokens").where("active", "==", true).orderBy("__name__").limit(PAGE_SIZE);
+      if (cursor) pageQuery = pageQuery.startAfter(cursor);
+      const pageSnap = await pageQuery.get();
+      if (pageSnap.empty) break;
+      allTokenDocs.push(...pageSnap.docs);
+      cursor = pageSnap.docs[pageSnap.docs.length - 1];
+      if (pageSnap.size < PAGE_SIZE) break;
+    }
+
+    const tokens = allTokenDocs
       .filter((tokenDoc) => {
         const data = tokenDoc.data() as PushTokenDoc;
         if (data.uid === body.authorId) return false;

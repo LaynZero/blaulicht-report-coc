@@ -80,6 +80,15 @@ export default function InfoPage() {
             Je genauer und fairer die Meldungen sind, desto nützlicher wird die App für alle im COC-Gebiet. Lieber kurz und korrekt als lang und unsicher.
           </p>
         </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <a href="/datenschutz" className="block rounded-3xl border border-white/10 bg-slate-900/70 p-5 text-center text-sm font-bold text-slate-300 hover:bg-slate-900">
+            Datenschutz
+          </a>
+          <a href="/impressum" className="block rounded-3xl border border-white/10 bg-slate-900/70 p-5 text-center text-sm font-bold text-slate-300 hover:bg-slate-900">
+            Impressum
+          </a>
+        </div>
       </section>
       <BottomNavigation />
     </main>

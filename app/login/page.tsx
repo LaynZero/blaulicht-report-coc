@@ -60,13 +60,10 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-slate-400">Willkommen zurück im Blaulicht Report.</p>
         </div>
 
-        <button type="button" onClick={loginWithGoogle} disabled={loading} className="w-full rounded-2xl border border-white/10 bg-white py-3 font-black text-slate-950 disabled:opacity-60">
-          Mit Google einloggen
-        </button>
 
         <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
           <span className="h-px flex-1 bg-white/10" />
-          oder
+          Anmelden
           <span className="h-px flex-1 bg-white/10" />
         </div>
 

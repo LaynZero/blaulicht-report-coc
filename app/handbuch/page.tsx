@@ -59,7 +59,7 @@ export default function HandbuchPage() {
             <li>„Zum Startbildschirm hinzufügen" auswählen.</li>
             <li>Auf „Installieren" tippen.</li>
           </ol>
-          <p className="text-xs text-slate-500">Alternativ steht die App auch im Google Play Store zur Verfügung.</p>
+          <p className="text-xs text-slate-500">Ein Release im Google Play Store ist bereits in Vorbereitung und folgt demnächst – bis dahin funktioniert die Installation wie oben beschrieben genauso zuverlässig.</p>
         </Section>
 
         <Section icon={UserPlus} title="3. Erste Schritte">

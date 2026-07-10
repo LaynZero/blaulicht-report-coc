@@ -4,12 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { auth } from "../firebase";
-import {
-  GoogleAuthProvider,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-  signInWithRedirect,
-} from "firebase/auth";
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -31,19 +26,6 @@ export default function LoginPage() {
     }
   }
 
-  async function loginWithGoogle() {
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      await signInWithRedirect(auth, provider);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Google Login fehlgeschlagen.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function resetPassword() {
     if (!email) return alert("Gib zuerst deine E-Mail ein.");
     await sendPasswordResetEmail(auth, email);
@@ -58,13 +40,6 @@ export default function LoginPage() {
           <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-400">COC Live</p>
           <h1 className="mt-2 text-3xl font-black">Einloggen</h1>
           <p className="mt-2 text-sm text-slate-400">Willkommen zurück im Blaulicht Report.</p>
-        </div>
-
-
-        <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-          <span className="h-px flex-1 bg-white/10" />
-          Anmelden
-          <span className="h-px flex-1 bg-white/10" />
         </div>
 
         <input className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4 outline-none focus:border-blue-500" placeholder="E-Mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />

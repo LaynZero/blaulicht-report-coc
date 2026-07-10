@@ -74,6 +74,7 @@ export default function AdminHandbuchPage() {
 
         <Section icon={Settings} title="5. Wartungsmodus (nur Entwickler)">
           <p>Blendet die App für alle Nutzer mit einer Wartungsnachricht aus. Die Option „Admins dürfen trotzdem rein" lässt Admin-/Entwickler-Accounts weiterhin arbeiten, während normale Nutzer die Wartungsseite sehen – praktisch für Updates, die getestet werden sollen, bevor alle wieder reinkönnen.</p>
+          <p>Im selben Bereich lässt sich auch die <b>Crashlog-Erfassung</b> ein-/ausschalten. Standardmäßig an. Wenn zu viele unklare Fehlermeldungen die Datenbank füllen, kann sie hier zentral für alle Nutzer deaktiviert werden, ohne Code-Änderung. Bestehende Logs bleiben dabei erhalten, es kommen nur keine neuen mehr dazu.</p>
         </Section>
 
         <Section icon={Shield} title="6. Gruppenregeln bearbeiten">

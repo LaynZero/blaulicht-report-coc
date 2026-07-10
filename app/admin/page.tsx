@@ -61,6 +61,7 @@ const defaultAppSettings: AppSettings = {
   allowAdminsDuringMaintenance: true,
   maintenanceMessage: "Wir führen gerade Wartungsarbeiten durch. Bitte versuche es gleich noch einmal.",
   groupRules: DEFAULT_GROUP_RULES,
+  crashLoggingEnabled: true,
 };
 
 function SupportTicketPanel({ ticket }: { ticket: SupportTicket }) {
@@ -384,6 +385,24 @@ export default function AdminPage() {
       );
     } catch (err) {
       alert(err instanceof Error ? err.message : "Wartungsmodus konnte nicht gespeichert werden.");
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+  async function saveCrashLoggingSetting(enabled: boolean) {
+    if (userData?.role !== "developer") return alert("Nur Entwickler dürfen die Crashlog-Erfassung ändern.");
+    const next = { ...appSettings, crashLoggingEnabled: enabled };
+    setAppSettings(next);
+    setSavingSettings(true);
+    try {
+      await setDoc(
+        doc(db, "appSettings", "main"),
+        { crashLoggingEnabled: enabled, updatedAt: serverTimestamp(), updatedBy: userData.uid },
+        { merge: true },
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Einstellung konnte nicht gespeichert werden.");
     } finally {
       setSavingSettings(false);
     }
@@ -949,6 +968,19 @@ export default function AdminPage() {
                       saveMaintenanceSettings(next);
                     }}
                     className="h-5 w-5 accent-blue-500"
+                  />
+                </label>
+
+                <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                  <div>
+                    <p className="font-black">Crashlogs erfassen</p>
+                    <p className="mt-1 text-xs text-slate-400">Aus = keine neuen Client-Fehler landen mehr in der Datenbank. Bestehende Logs bleiben erhalten.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={appSettings.crashLoggingEnabled !== false}
+                    onChange={(e) => saveCrashLoggingSetting(e.target.checked)}
+                    className="h-5 w-5 accent-emerald-500"
                   />
                 </label>
               </div>

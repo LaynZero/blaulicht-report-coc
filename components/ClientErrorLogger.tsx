@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
+import { addDoc, collection, doc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "@/app/context/AuthContext";
 import { db } from "@/app/firebase";
 
@@ -29,6 +29,16 @@ export default function ClientErrorLogger() {
   const { user } = useAuth();
   const lastActionRef = useRef("App gestartet");
   const lastLogRef = useRef<{ key: string; at: number } | null>(null);
+  // Defaults to enabled (previous behavior) until the settings doc says otherwise.
+  const [loggingEnabled, setLoggingEnabled] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "appSettings", "main"), (snap) => {
+      const data = snap.data();
+      setLoggingEnabled(data?.crashLoggingEnabled !== false);
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const rememberAction = (event: Event) => {
@@ -47,6 +57,7 @@ export default function ClientErrorLogger() {
     document.addEventListener("change", rememberAction, true);
 
     async function saveCrashLog(payload: CrashPayload) {
+      if (!loggingEnabled) return;
       try {
         const normalizedMessage =
           payload.message === "Script error."
@@ -115,7 +126,7 @@ export default function ClientErrorLogger() {
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onUnhandled);
     };
-  }, [user?.uid]);
+  }, [user?.uid, loggingEnabled]);
 
   return null;
 }

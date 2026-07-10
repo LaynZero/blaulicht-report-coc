@@ -152,6 +152,8 @@ export type AppSettings = {
   allowAdminsDuringMaintenance: boolean;
   maintenanceMessage?: string;
   groupRules?: string;
+  /** Defaults to true when absent (existing behavior); developers can switch off client crash-log collection. */
+  crashLoggingEnabled?: boolean;
   updatedAt?: unknown;
   updatedBy?: string;
 };

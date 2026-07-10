@@ -214,7 +214,14 @@ export default function ReportCard({ report }: { report: Report }) {
         <span className="rounded-full bg-blue-600/20 px-3 py-1 text-sm font-semibold text-blue-300">
           {categoryEmoji(report.category)} {report.category}
         </span>
-        <span className="text-xs text-slate-400">{formatRelativeTime(report.createdAt)}</span>
+        <div className="flex items-center gap-2">
+          {report.pinnedIndefinitely && (
+            <span className="rounded-full bg-amber-500/20 px-2 py-1 text-xs font-bold text-amber-300" title="Von einem Admin dauerhaft behalten">
+              📌
+            </span>
+          )}
+          <span className="text-xs text-slate-400">{formatRelativeTime(report.createdAt)}</span>
+        </div>
       </div>
 
       <div className="mb-3 flex items-start gap-3">

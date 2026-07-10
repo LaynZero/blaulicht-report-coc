@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { doc, getDoc, serverTimestamp, updateDoc, writeBatch } from "firebase/firestore";
 import { updatePassword, updateProfile } from "firebase/auth";
 import BottomNavigation from "@/components/BottomNavigation";
@@ -12,9 +13,10 @@ import { useAuth } from "@/app/context/AuthContext";
 import { db } from "@/app/firebase";
 import { isReservedUsername, normalizeUsername } from "@/lib/helpers";
 import { uploadAvatarImage } from "@/lib/upload";
-import { Camera, HelpCircle, Loader2, MessageCircle, Shield, Siren, Trash2 } from "lucide-react";
+import { AlertTriangle, Camera, HelpCircle, Loader2, MessageCircle, Shield, Siren, Trash2 } from "lucide-react";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { user, userData, refreshUserData } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -26,6 +28,44 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [trustHelpOpen, setTrustHelpOpen] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  async function deleteAccount() {
+    if (!user || !userData) return;
+    if (userData.role === "admin" || userData.role === "developer") {
+      alert("Admin-/Entwickler-Accounts können nicht selbst gelöscht werden. Bitte wende dich an ein anderes Teammitglied, um deine Rolle zu übergeben.");
+      return;
+    }
+
+    const confirmed = confirm(
+      `Möchtest du deinen Account @${userData.username} wirklich unwiderruflich löschen?\n\nAlle deine Meldungen, Kommentare und Daten werden entfernt. Das kann nicht rückgängig gemacht werden.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingAccount(true);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const rawText = await response.text();
+      let data: { ok?: boolean; message?: string };
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(`Serverfehler (Status ${response.status}). Bitte versuche es später erneut.`);
+      }
+      if (!response.ok || !data.ok) throw new Error(data.message || "Account konnte nicht gelöscht werden.");
+
+      alert("Dein Account wurde gelöscht.");
+      router.push("/login");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Account konnte nicht gelöscht werden.");
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
 
   useEffect(() => {
     setDisplayName(userData?.displayName ?? "");
@@ -221,6 +261,25 @@ export default function ProfilePage() {
             </div>
             <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4 outline-none focus:border-blue-500" placeholder="Neues Passwort" type="password" minLength={6} />
             <button onClick={savePassword} disabled={passwordSaving || !newPassword} className="w-full rounded-2xl bg-slate-800 py-3 font-black disabled:opacity-60">{passwordSaving ? "Ändert..." : "Passwort ändern"}</button>
+          </div>
+          <div className="mt-5 rounded-3xl border border-red-500/30 bg-red-500/5 p-5">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="text-red-400" size={20} />
+              <h2 className="text-lg font-black text-red-200">Account löschen</h2>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-red-100/70">
+              Löscht deinen Account sowie alle deine Meldungen, Kommentare und Daten unwiderruflich. Diese Aktion kann nicht rückgängig gemacht werden.
+            </p>
+            {(userData?.role === "admin" || userData?.role === "developer") && (
+              <p className="mt-2 text-xs text-red-100/50">Admin-/Entwickler-Accounts müssen ihre Rolle zuerst an ein anderes Teammitglied übergeben.</p>
+            )}
+            <button
+              onClick={deleteAccount}
+              disabled={deletingAccount}
+              className="mt-4 w-full rounded-2xl bg-red-600 py-3 font-black text-white transition hover:bg-red-500 disabled:opacity-60"
+            >
+              {deletingAccount ? "Wird gelöscht..." : "Account unwiderruflich löschen"}
+            </button>
           </div>
         </section>
         <BottomNavigation />

@@ -72,6 +72,8 @@ export type Report = {
   updatedAt?: unknown;
   /** Set at creation to createdAt + 24h. A Firestore TTL policy on this field auto-deletes the doc. */
   expiresAt?: unknown;
+  /** Set by admins/developers to exempt a report from the 24h auto-expiry (both the client-side hide and the TTL deletion). */
+  pinnedIndefinitely?: boolean;
 };
 
 export type ReportComment = {

@@ -71,7 +71,8 @@ export function getTimestampMillis(value: unknown) {
   return 0;
 }
 
-export function isReportExpired(createdAt: unknown, ttlMs = 24 * 60 * 60 * 1000) {
+export function isReportExpired(createdAt: unknown, pinnedIndefinitely?: boolean, ttlMs = 24 * 60 * 60 * 1000) {
+  if (pinnedIndefinitely) return false;
   const created = getTimestampMillis(createdAt);
   return Boolean(created && Date.now() - created > ttlMs);
 }

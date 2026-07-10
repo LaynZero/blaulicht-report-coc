@@ -23,7 +23,7 @@ export default function Home() {
     const unsub = onSnapshot(q, (snap) => {
       const allReports = snap.docs
         .map((item) => ({ id: item.id, ...item.data() }) as Report)
-        .filter((item) => item.status !== "hidden" && !isExpiredArchived(item.status, item.updatedAt, item.createdAt) && !isReportExpired(item.createdAt));
+        .filter((item) => item.status !== "hidden" && !isExpiredArchived(item.status, item.updatedAt, item.createdAt) && !isReportExpired(item.createdAt, item.pinnedIndefinitely));
       setReports(category === "Alle" ? allReports : allReports.filter((item) => item.category === category));
       setLoading(false);
     }, () => setLoading(false));

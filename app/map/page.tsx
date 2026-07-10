@@ -35,7 +35,7 @@ export default function MapPage() {
 
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(80)), (snap) => {
-      setReports(snap.docs.map((item) => ({ id: item.id, ...item.data() }) as Report).filter((item) => item.status !== "hidden" && !isReportExpired(item.createdAt)));
+      setReports(snap.docs.map((item) => ({ id: item.id, ...item.data() }) as Report).filter((item) => item.status !== "hidden" && !isReportExpired(item.createdAt, item.pinnedIndefinitely)));
     });
     return () => unsub();
   }, []);

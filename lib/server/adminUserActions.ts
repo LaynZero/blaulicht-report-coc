@@ -65,29 +65,15 @@ export async function applyRoleChange(admin: AdminContext, requester: AdminReque
 }
 
 /**
- * Fully removes a user: Firestore user + username doc, all owned content
+ * Core deletion routine shared by the admin-initiated and self-service delete
+ * paths: removes the Firestore user + username doc, all owned content
  * (reports, comments, messages, tickets, push tokens, notifications, crash
- * logs) and the Firebase Auth account itself. Developers and admins cannot
- * be deleted directly (admins must be demoted first).
+ * logs) and the Firebase Auth account itself.
  */
-export async function removeUserAccount(admin: AdminContext, requester: AdminRequester, uid: string) {
-  if (uid === requester.uid) throw new AdminActionError("Du kannst dich nicht selbst löschen.", 400);
-
-  const targetRef = admin.firestore.collection("users").doc(uid);
-  const targetSnap = await targetRef.get();
-  if (!targetSnap.exists) throw new AdminActionError("Nutzer nicht gefunden.", 404);
-
-  const target = targetSnap.data() as { role?: UserRole; username?: string };
-  const targetRole = target.role || "user";
-
-  if (targetRole === "developer") throw new AdminActionError("Entwickler können nicht gelöscht werden.", 403);
-  if (targetRole === "admin") {
-    throw new AdminActionError("Admins können nicht direkt gelöscht werden. Entziehe zuerst die Admin-Rolle.", 403);
-  }
-
+async function deleteUserAccountCore(admin: AdminContext, uid: string, username?: string) {
   const batch = admin.firestore.batch();
-  batch.delete(targetRef);
-  if (target.username) batch.delete(admin.firestore.collection("usernames").doc(target.username));
+  batch.delete(admin.firestore.collection("users").doc(uid));
+  if (username) batch.delete(admin.firestore.collection("usernames").doc(username));
   await batch.commit();
 
   await Promise.all([
@@ -106,4 +92,48 @@ export async function removeUserAccount(admin: AdminContext, requester: AdminReq
     const code = (error as { code?: string })?.code || "";
     if (!code.includes("user-not-found")) throw error;
   }
+}
+
+/**
+ * Admin-initiated removal of another user. Developers and admins cannot be
+ * deleted this way (admins must be demoted first) — and an admin can never
+ * use this path to delete themselves (see deleteOwnAccount for that).
+ */
+export async function removeUserAccount(admin: AdminContext, requester: AdminRequester, uid: string) {
+  if (uid === requester.uid) throw new AdminActionError("Du kannst dich nicht selbst löschen.", 400);
+
+  const targetRef = admin.firestore.collection("users").doc(uid);
+  const targetSnap = await targetRef.get();
+  if (!targetSnap.exists) throw new AdminActionError("Nutzer nicht gefunden.", 404);
+
+  const target = targetSnap.data() as { role?: UserRole; username?: string };
+  const targetRole = target.role || "user";
+
+  if (targetRole === "developer") throw new AdminActionError("Entwickler können nicht gelöscht werden.", 403);
+  if (targetRole === "admin") {
+    throw new AdminActionError("Admins können nicht direkt gelöscht werden. Entziehe zuerst die Admin-Rolle.", 403);
+  }
+
+  await deleteUserAccountCore(admin, uid, target.username);
+}
+
+/**
+ * Self-service account deletion (DSGVO Art. 17). Admins/developers are
+ * blocked from self-deleting this way to avoid accidentally orphaning the
+ * community without staff — they should hand off their role first, or
+ * contact another developer.
+ */
+export async function deleteOwnAccount(admin: AdminContext, uid: string) {
+  const targetRef = admin.firestore.collection("users").doc(uid);
+  const targetSnap = await targetRef.get();
+  if (!targetSnap.exists) throw new AdminActionError("Nutzer nicht gefunden.", 404);
+
+  const target = targetSnap.data() as { role?: UserRole; username?: string };
+  const targetRole = target.role || "user";
+
+  if (targetRole === "admin" || targetRole === "developer") {
+    throw new AdminActionError("Admin-/Entwickler-Accounts können nicht selbst gelöscht werden. Bitte wende dich an ein anderes Teammitglied, um die Rolle zu übergeben.", 403);
+  }
+
+  await deleteUserAccountCore(admin, uid, target.username);
 }

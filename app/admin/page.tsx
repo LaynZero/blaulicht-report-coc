@@ -6,6 +6,7 @@ import {
   collection,
   collectionGroup,
   deleteDoc,
+  deleteField,
   doc,
   getDocs,
   endAt,
@@ -44,6 +45,7 @@ import {
   Search,
   Send,
   Shield,
+  Pin,
   Trash2,
   UserCog,
   Activity,
@@ -563,9 +565,47 @@ export default function AdminPage() {
     }
   }
 
-  async function deleteReport(reportId: string) {
-    if (confirm("Meldung löschen?"))
-      await deleteDoc(doc(db, "reports", reportId));
+  async function deleteReport(report: Report) {
+    if (!confirm("Meldung löschen?")) return;
+
+    try {
+      const commentsSnap = await getDocs(collection(db, "reports", report.id, "comments"));
+      if (!commentsSnap.empty) {
+        const batch = writeBatch(db);
+        commentsSnap.docs.forEach((commentDoc) => batch.delete(commentDoc.ref));
+        await batch.commit();
+      }
+
+      await deleteDoc(doc(db, "reports", report.id));
+
+      if (report.authorId && report.authorId !== userData?.uid) {
+        await addDoc(collection(db, "notifications"), {
+          userId: report.authorId,
+          type: "admin",
+          title: "Deine Meldung wurde entfernt",
+          body: `Deine Meldung "${report.category}${report.location ? " · " + report.location : ""}" wurde von einem Admin gelöscht, da sie gegen die Gruppenregeln verstößt.`,
+          source: "report",
+          read: false,
+          createdAt: serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Meldung konnte nicht gelöscht werden.");
+    }
+  }
+
+  async function togglePinIndefinitely(report: Report) {
+    const nextPinned = !report.pinnedIndefinitely;
+    try {
+      await updateDoc(doc(db, "reports", report.id), {
+        pinnedIndefinitely: nextPinned,
+        // Removing expiresAt stops the Firestore TTL policy from deleting this doc.
+        // Re-enabling auto-expiry gives it a fresh 24h window from now.
+        expiresAt: nextPinned ? deleteField() : new Date(Date.now() + 24 * 60 * 60 * 1000),
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Konnte nicht geändert werden.");
+    }
   }
 
   return (
@@ -583,8 +623,13 @@ export default function AdminPage() {
                 @Benutzername und bearbeite dann gezielt einen Account.
               </p>
             </div>
-            <div className="rounded-3xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-200">
-              {isDeveloperMode ? "💻 Entwickler-Modus" : "🛡️ Admin-Modus"}
+            <div className="flex flex-col items-end gap-2">
+              <div className="rounded-3xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-200">
+                {isDeveloperMode ? "💻 Entwickler-Modus" : "🛡️ Admin-Modus"}
+              </div>
+              <a href="/admin/handbuch" className="text-xs font-bold text-slate-400 underline hover:text-slate-300">
+                📖 Admin-Handbuch
+              </a>
             </div>
           </div>
 
@@ -976,12 +1021,20 @@ export default function AdminPage() {
                     <p className="mt-1 text-sm text-slate-400">
                       {(report.reports ?? []).length} Meldungen
                     </p>
-                    <button
-                      onClick={() => deleteReport(report.id)}
-                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold"
-                    >
-                      <Trash2 size={15} /> Beitrag löschen
-                    </button>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => togglePinIndefinitely(report)}
+                        className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold ${report.pinnedIndefinitely ? "bg-amber-500/20 text-amber-200" : "bg-slate-800 text-slate-200 hover:bg-slate-700"}`}
+                      >
+                        <Pin size={15} /> {report.pinnedIndefinitely ? "Behalten aktiv" : "Dauerhaft behalten"}
+                      </button>
+                      <button
+                        onClick={() => deleteReport(report)}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold"
+                      >
+                        <Trash2 size={15} /> Löschen
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

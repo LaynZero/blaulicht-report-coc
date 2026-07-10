@@ -51,7 +51,9 @@ Jede Meldung bekommt beim Erstellen ein `expiresAt`-Feld (createdAt + 24h). Dami
 
 Wichtig: Die App blendet abgelaufene Meldungen im Feed und auf der Karte **sofort** nach 24h aus (clientseitig geprüft, unabhängig von der TTL-Policy) – die TTL-Policy sorgt nur dafür, dass die Dokumente auch wirklich aus der Datenbank verschwinden und nicht nur unsichtbar im Hintergrund bleiben.
 
-**Bekannte Einschränkung:** Bild-/Audio-Dateien in Firebase Storage werden durch die TTL-Policy *nicht* automatisch mitgelöscht, nur das Firestore-Dokument. Für ein späteres Aufräumen der zugehörigen Storage-Dateien bräuchte es zusätzlich eine Firebase Cloud Function (`onDocumentDeleted`-Trigger), die auf dem Blaze-Tarif läuft – sag Bescheid, falls du das aufgesetzt haben willst.
+**Bekannte Einschränkung:** Bild-/Audio-Dateien in Firebase Storage *und* die `comments`-Subcollection eines Reports werden durch die TTL-Policy *nicht* automatisch mitgelöscht, nur das Firestore-Report-Dokument selbst. Beim manuellen Löschen über den Admin-Bereich werden Kommentare bereits sauber mitgelöscht – nur der automatische 24h-Ablauf betrifft das nicht. Für ein vollständiges Aufräumen (Storage-Dateien + Kommentare) bräuchte es zusätzlich eine Firebase Cloud Function (`onDocumentDeleted`-Trigger), die auf dem Blaze-Tarif läuft – sag Bescheid, falls du das aufgesetzt haben willst.
+
+**Meldungen dauerhaft behalten:** Admins/Entwickler können einzelne Meldungen im Admin-Bereich (bei den gemeldeten Beiträgen) über "Dauerhaft behalten" von der automatischen 24h-Löschung ausnehmen. Das entfernt das `expiresAt`-Feld, wodurch weder der clientseitige Filter noch die TTL-Policy die Meldung entfernen. Ein 📌-Badge macht das im Feed für alle sichtbar.
 
 ## Spam-Schutz beim Erstellen von Meldungen
 

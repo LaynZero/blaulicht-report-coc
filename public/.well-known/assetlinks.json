@@ -1,10 +1,16 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "de.itspan.blaulichtreportcoc",
-      "sha256_cert_fingerprints": ["24:E8:1A:AB:0A:46:22:9C:91:3C:03:52:55:24:2F:1A:C1:60:81:45:05:0F:26:1B:A9:01:CC:84:F3:D6:A5:A4"]
+      "sha256_cert_fingerprints": [
+        "24:E8:1A:AB:0A:46:22:9C:91:3C:03:52:55:24:2F:1A:C1:60:81:45:05:0F:26:1B:A9:01:CC:84:F3:D6:A5:A4",
+        "E0:55:EF:DD:6D:35:69:52:F8:BD:47:0A:23:A8:DD:C0:45:2D:8B:C0:DE:5C:23:93:F7:75:BD:1B:B2:D1:2B:24"
+      ]
     }
   }
 ]

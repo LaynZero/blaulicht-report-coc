@@ -15,10 +15,11 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { CheckCircle2, Flag, MapPin, MessageCircle, Mic, Navigation, ShieldCheck, Trash2 } from "lucide-react";
+import { CheckCircle2, Flag, MapPin, MessageCircle, Mic, Navigation, Share2, ShieldCheck, Trash2 } from "lucide-react";
 import { db } from "@/app/firebase";
 import { useAuth } from "@/app/context/AuthContext";
 import { categoryEmoji, extractMentions, formatRelativeTime } from "@/lib/helpers";
+import { shareNative } from "@/lib/native";
 import type { Report, ReportComment } from "@/lib/types";
 import RoleBadge from "@/components/ui/RoleBadge";
 import UserAvatar from "@/components/ui/UserAvatar";
@@ -75,6 +76,30 @@ export default function ReportCard({ report }: { report: Report }) {
       return false;
     }
     return true;
+  }
+
+  async function shareReport(target: Report) {
+    const shareUrl = `${window.location.origin}/report/${target.id}`;
+    const shareData = {
+      title: `${categoryEmoji(target.category)} ${target.category}${target.location ? " · " + target.location : ""}`,
+      text: target.description || "Aktuelle Meldung auf Blaulicht Report COC",
+      url: shareUrl,
+    };
+
+    const sharedNatively = await shareNative(shareData);
+    if (sharedNatively) return;
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch {
+        // User cancelled the native share sheet — not an error.
+      }
+      return;
+    }
+
+    await navigator.clipboard.writeText(shareUrl);
+    alert("Link kopiert!");
   }
 
   async function markConfirmed() {
@@ -220,6 +245,9 @@ export default function ReportCard({ report }: { report: Report }) {
               📌
             </span>
           )}
+          <button onClick={() => shareReport(report)} className="rounded-full p-1.5 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Meldung teilen" title="Teilen">
+            <Share2 size={15} />
+          </button>
           <span className="text-xs text-slate-400">{formatRelativeTime(report.createdAt)}</span>
         </div>
       </div>

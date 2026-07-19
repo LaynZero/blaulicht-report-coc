@@ -40,7 +40,7 @@ export default function BottomNavigation() {
   const { openForStaff, answeredForUser } = useSupportBadgeCounts();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pt-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 transform-gpu px-4 pb-4 pt-2">
       <div className="mx-auto grid max-w-md grid-cols-[1fr_1fr_76px_1fr_1fr] items-center rounded-[2rem] border border-white/10 bg-slate-950/92 px-3 py-3 text-slate-400 shadow-2xl shadow-black/40 backdrop-blur-2xl">
         <NavItem href="/" icon={Home} label="Feed" />
         <NavItem href="/support" icon={MessageCircle} label="Support" badgeCount={answeredForUser} />

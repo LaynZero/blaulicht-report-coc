@@ -7,6 +7,7 @@ import { Bell, BellRing, KeyRound, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import { db, getFirebaseMessaging } from "@/app/firebase";
 import { reportCategories } from "@/lib/helpers";
+import { isNativeApp, registerNativePush } from "@/lib/native";
 import type { ReportCategory } from "@/lib/types";
 
 const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "";
@@ -101,20 +102,31 @@ export default function PushNotifications() {
   async function enablePush() {
     setMessage("");
     if (!user || !userData) return setMessage("Bitte zuerst einloggen.");
-    if (!supported) return setMessage("Push-Benachrichtigungen werden auf diesem Gerät/Browser nicht unterstützt.");
-    if (!vapidKey) return setMessage("Push ist vorbereitet. Trage zuerst den Web Push VAPID Key in .env.local oder Vercel ein und starte neu.");
 
     setLoading(true);
     try {
-      const result = await Notification.requestPermission();
-      setPermission(result);
-      if (result !== "granted") return setMessage("Benachrichtigungen wurden nicht erlaubt.");
+      let token: string | null = null;
 
-      const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
-      const messaging = await getFirebaseMessaging();
-      if (!messaging) return setMessage("Firebase Messaging wird hier nicht unterstützt.");
+      if (isNativeApp()) {
+        // Native iOS wrapper: real APNs push via Firebase, no VAPID/service worker needed.
+        token = await registerNativePush();
+        setPermission(token ? "granted" : "denied");
+        if (!token) return setMessage("Benachrichtigungen wurden nicht erlaubt.");
+      } else {
+        if (!supported) return setMessage("Push-Benachrichtigungen werden auf diesem Gerät/Browser nicht unterstützt.");
+        if (!vapidKey) return setMessage("Push ist vorbereitet. Trage zuerst den Web Push VAPID Key in .env.local oder Vercel ein und starte neu.");
 
-      const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+        const result = await Notification.requestPermission();
+        setPermission(result);
+        if (result !== "granted") return setMessage("Benachrichtigungen wurden nicht erlaubt.");
+
+        const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+        const messaging = await getFirebaseMessaging();
+        if (!messaging) return setMessage("Firebase Messaging wird hier nicht unterstützt.");
+
+        token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+      }
+
       if (!token) return setMessage("Es konnte kein Push-Token erstellt werden.");
 
       await setDoc(doc(db, "pushTokens", token), {
@@ -128,6 +140,7 @@ export default function PushNotifications() {
         emergency: emergencyEnabled,
         mentions: mentionsEnabled,
         userAgent: navigator.userAgent,
+        platform: isNativeApp() ? "ios-native" : "web",
         active: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

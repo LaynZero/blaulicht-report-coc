@@ -13,6 +13,20 @@
   box-sizing: border-box;
 }
 
+/*
+ * Mobile browsers (and TWA/PWA chrome) resize the visible viewport when their
+ * own UI (address bar, keyboard, etc.) shows/hides. The old 100vh unit refers
+ * to the *largest* possible viewport, not the currently visible one, which is
+ * what causes `position: fixed` elements (like the bottom nav) to visually
+ * detach and "jump" during scroll on Android/iOS. 100dvh tracks the real
+ * visible viewport instead. The 100vh line is kept first as a fallback for
+ * older browsers that don't support dvh yet.
+ */
+.min-h-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 body {
   margin: 0;
   background:

@@ -72,6 +72,24 @@ Admins können im Admin-Bereich neben "Nutzer sperren" auch "Gerät sperren" wä
 
 Geräte werden erst ab dem ersten Login/Registrierung *nach* Einführung dieses Features erfasst — für ältere Accounts ohne bekannte Geräte-ID zeigt der Button entsprechend eine Meldung.
 
+## iOS App (Capacitor)
+
+Der Code für den nativen iOS-Wrapper ist vorbereitet (`capacitor.config.ts`, `lib/native.ts`, Push/Share-Integration). Folgendes muss einmalig **auf einem Mac mit Xcode** ausgeführt werden — das kann nicht ferngesteuert/ohne macOS erledigt werden:
+
+1. **Node-Abhängigkeiten installieren**: `npm install` (installiert dabei auch die neuen Capacitor-Pakete)
+2. **iOS-Plattform generieren**: `npx cap add ios` — erstellt einen kompletten Xcode-Projektordner `ios/`
+3. **Xcode öffnen**: `npm run cap:open` (bzw. `npx cap open ios`)
+4. In Xcode: Apple Developer Account unter "Signing & Capabilities" hinterlegen, Bundle ID prüfen (muss `de.itspan.blaulichtreportcoc` sein, identisch zur Android-Package-ID)
+5. **Push Notifications Capability** in Xcode aktivieren (Signing & Capabilities → "+ Capability" → "Push Notifications")
+6. Firebase-iOS-Konfigurationsdatei (`GoogleService-Info.plist`) aus der Firebase Console herunterladen (Projekteinstellungen → iOS-App hinzufügen, Bundle ID wie oben) und ins Xcode-Projekt ziehen
+7. In der **Firebase Console** unter Cloud Messaging: Euren Apple Push Notification Auth Key (.p8-Datei) hochladen, den ihr im Apple Developer Portal unter "Keys" erstellt — verbindet APNs mit Firebase
+8. Erstmal auf einem eigenen Testgerät/Simulator laufen lassen (Xcode → Run), bevor's zu TestFlight/App Store Connect geht
+9. Nach jeder Code-Änderung am Next.js-Teil: `npm run cap:sync`, um die native Hülle zu aktualisieren (lädt aber ohnehin die Live-Seite, daher meist nur bei Native-Plugin-Änderungen nötig)
+
+**Was die App nativ jetzt wirklich kann** (wichtig für die Apple-Review-Begründung, siehe Kapitel weiter oben zu "reinen PWA-Wrappern"):
+- Echte Push-Benachrichtigungen über Apples APNs (nicht nur Web-Push) — technisch über Firebase Cloud Messaging gebrückt, sodass die bestehenden Push-Routes unverändert weiterlaufen
+- Natives iOS-Teilen-Menü (Share Sheet) beim Teilen einer Meldung
+
 ## Entwicklerrolle setzen
 
 Nach der Registrierung in Firestore unter `users/{deineUid}` das Feld setzen:
